@@ -61,6 +61,7 @@ describe("T-402-6 mint down", () => {
       if (url.endsWith("/v1/swap")) throw new TypeError("network timeout (simulated)");
       return fetch(input, init);
     };
+    await makePaywall(db()).topupWithToken(await faucet.token(5)); // warm the mint cache: only the swap goes to the flaky fetch
     const pw = makePaywall(db(), { fetch: flaky });
     const t = await faucet.token(10);
     const res = await pw.protect(fortune, { priceSats: 5 })(req({ "X-Cashu": t }));

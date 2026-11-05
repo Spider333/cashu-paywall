@@ -4,11 +4,28 @@ import { Mint, MintQuoteState, Wallet, getEncodedToken, type Proof } from "@cash
 import { createMintRequest } from "../../src/core/mint-request";
 import { TESTNUT } from "../helpers";
 
+/** testnut is a public mint and sometimes slow: retry a test helper's mint calls on timeouts (never the code under test). */
+export async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const transient = /timed out|NetworkError|fetch failed|Mint request failed/i.test(String((e as Error)?.message ?? e)) || (e as Error)?.name === "NetworkError";
+      if (!transient || i >= tries) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * i));
+    }
+  }
+}
+
 export function testWallet(unit = "sat", mintUrl = TESTNUT): Wallet {
   return new Wallet(new Mint(mintUrl, { customRequest: createMintRequest(fetch) }), { unit, denominationTarget: 1 });
 }
 
 export async function mintProofs(wallet: Wallet, amount: number): Promise<Proof[]> {
+  return retry(() => mintProofsOnce(wallet, amount));
+}
+
+async function mintProofsOnce(wallet: Wallet, amount: number): Promise<Proof[]> {
   const q = await wallet.createMintQuoteBolt11(amount);
   const t0 = Date.now();
   let st = await wallet.checkMintQuoteBolt11(q.quote);
@@ -40,7 +57,7 @@ export class Faucet {
     const have = this.proofs.reduce((s, p) => s + p.amount.toNumber(), 0);
     if (have >= amount + 20) return;
     if (!this.loaded) {
-      await this.wallet.loadMint();
+      await retry(() => this.wallet.loadMint());
       this.loaded = true;
     }
     this.proofs.push(...(await mintProofs(this.wallet, Math.max(2_000, amount + 50))));
@@ -50,8 +67,8 @@ export class Faucet {
   token(amount: number, opts: { p2pkPubkey?: string } = {}): Promise<string> {
     return this.run(async () => {
       await this.ensure(amount);
-      const { send, keep } = await this.wallet.send(amount, this.proofs, { includeFees: false },
-        opts.p2pkPubkey ? { send: { type: "p2pk", options: { pubkey: opts.p2pkPubkey } } } : undefined);
+      const { send, keep } = await retry(() => this.wallet.send(amount, this.proofs, { includeFees: false },
+        opts.p2pkPubkey ? { send: { type: "p2pk", options: { pubkey: opts.p2pkPubkey } } } : undefined));
       this.proofs = keep;
       return getEncodedToken({ mint: TESTNUT, proofs: send, unit: this.unit });
     });
@@ -61,7 +78,7 @@ export class Faucet {
   async load(): Promise<void> {
     await this.run(async () => {
       if (!this.loaded) {
-        await this.wallet.loadMint();
+        await retry(() => this.wallet.loadMint());
         this.loaded = true;
       }
     });
@@ -75,8 +92,8 @@ export class Faucet {
 /** Receives a token in a fresh wallet (proves a refund token is claimable). Returns the received amount. */
 export async function claim(token: string): Promise<number> {
   const w = testWallet();
-  await w.loadMint();
-  const got = await w.receive(token);
+  await retry(() => w.loadMint());
+  const got = await retry(() => w.receive(token));
   return got.reduce((s, p) => s + p.amount.toNumber(), 0);
 }
 

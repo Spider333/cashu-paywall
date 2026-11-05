@@ -65,6 +65,8 @@ describe("review #3: a key created by a PENDING top-up is handed back", () => {
       if (url.endsWith("/v1/swap")) throw new TypeError("connection reset after send (simulated)"); // ...but the answer is lost
       return res;
     };
+    // Warm the D1 mint cache with a normal top-up, so the only mint call the flaky fetch sees is the swap.
+    await makePaywall(db()).topupWithToken(await faucet.token(5));
     const pw = makePaywall(db(), { fetch: flaky });
     const t = await faucet.token(30);
     const res = await pw.protect(async () => new Response("ok"), { priceSats: 5 })(new Request("https://paywall.test/x", { headers: { "X-Cashu": t } }));
