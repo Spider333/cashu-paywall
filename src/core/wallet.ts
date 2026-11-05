@@ -60,3 +60,17 @@ export function isNetworkError(e: unknown): boolean {
 /** NUT error codes we act on (confirmed on testnut 5 Nov 2026: 11001 for spent). */
 export const NUT_ALREADY_SPENT = 11001;
 export const NUT_QUOTE_ISSUED = 20002;
+
+/**
+ * "These outputs were already signed": our NUT-13 counter went backwards (a D1 restore from backup, or two databases
+ * sharing one seed). The spec code is 10002; cdk-mintd 0.18 (testnut) answers 11008. Nothing was spent.
+ */
+export function isCounterReuse(e: unknown): boolean {
+  return isMintOperationError(e) && (e.code === 10002 || e.code === 11008);
+}
+
+/** Jumps this keyset's counter far past anything used, so the next op derives fresh outputs. */
+export async function skipCounterAhead(ctx: Ctx, keysetId: string, from: number): Promise<void> {
+  await new D1CounterSource(ctx.db).advanceToAtLeast(keysetId, from + 100_000);
+  ctx.log.warn("ecash_counter_reused", { keyset: keysetId.slice(0, 16), from });
+}

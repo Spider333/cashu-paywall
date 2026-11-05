@@ -13,6 +13,8 @@ export interface Env {
   ECASH_MELT_MIN_SATS?: string;
   ECASH_MAX_BALANCE_SATS?: string;
   ECASH_MAX_TOTAL_HELD_SATS?: string;
+  /** "creqA" (default, widest wallet support) or "creqB" (NUT-26). */
+  ECASH_REQUEST_ENCODING?: string;
   ECASH_RL?: RateLimiter;
 }
 
@@ -31,6 +33,7 @@ export function getPaywall(env: Env): Paywall {
     mints: env.ECASH_MINTS.split(","),
     publicBaseUrl: env.ECASH_PUBLIC_URL,
     priceSats: priceOf(env),
+    requestEncoding: env.ECASH_REQUEST_ENCODING === "creqB" ? "creqB" : "creqA",
     limits: { maxBalanceSats: num(env.ECASH_MAX_BALANCE_SATS), maxTotalHeldSats: num(env.ECASH_MAX_TOTAL_HELD_SATS) },
     melt: { lightningAddress: env.ECASH_MELT_LN_ADDRESS || undefined, minSats: num(env.ECASH_MELT_MIN_SATS) },
     rateLimiter: env.ECASH_RL,

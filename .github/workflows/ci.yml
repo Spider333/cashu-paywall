@@ -1,0 +1,31 @@
+name: ci
+# Runs on main and by hand only, so pushes to build branches and draft PRs on the private repo use no Actions
+# minutes until the owner decides. Add `pull_request:` when the repo goes public.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      # Unit tests (miniflare D1, no network). T-DEB-1 runs 20 rounds inside the suite.
+      - run: npm test
+      # Live tests against testnut.cashu.space (test sats only; its Lightning is fake).
+      - run: npm run test:testnut
+      - run: npx tsc --noEmit
+        working-directory: examples/demo-worker
+      - run: npx vitest run
+        working-directory: examples/demo-worker

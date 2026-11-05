@@ -10,7 +10,9 @@ import {
   sats, sealProofStmts, selectProofs, spendReservedStmt, type ProofRow,
 } from "./store.js";
 import { requireKey } from "./topup.js";
-import { getWallet } from "./wallet.js";
+import { getWallet, isCounterReuse, skipCounterAhead } from "./wallet.js";
+
+class CounterReused extends Error {}
 
 export interface RefundResult {
   token: string;
@@ -73,7 +75,12 @@ export async function refund(ctx: Ctx, key: EcashKey): Promise<RefundResult> {
       await failOp(ctx, opId, "reserve_conflict", false);
       continue;
     }
-    return await runRefundSwap(ctx, wallet, { opId, keyHash: row.key_hash, kid, mintUrl, B, fee, picked, counter: range.start });
+    try {
+      return await runRefundSwap(ctx, wallet, { opId, keyHash: row.key_hash, kid, mintUrl, B, fee, picked, counter: range.start });
+    } catch (e) {
+      if (!(e instanceof CounterReused) || attempt === 2) throw e instanceof CounterReused ? new PaywallError("ECASH_MINT_UNAVAILABLE") : e;
+      await skipCounterAhead(ctx, keysetId, range.start); // balance and proofs were restored; retry with fresh outputs
+    }
   }
   throw new PaywallError("ECASH_PENDING", { message: "The balance changed during the refund. Try again." });
 }
@@ -97,6 +104,7 @@ async function runRefundSwap(
       await releaseProofs(ctx, r.opId);
       await giveBackRefund(ctx, r.keyHash, r.B);
       await failOp(ctx, r.opId, `nut_${e.code}`, false);
+      if (isCounterReuse(e)) throw new CounterReused();
       ctx.log.error("ecash_refund_rejected", { kid: r.kid, op_id: r.opId, ...errorFields(e) });
       throw new PaywallError("ECASH_MINT_UNAVAILABLE", { message: "The mint refused the refund swap. Your balance is restored; try again later." });
     }

@@ -13,9 +13,20 @@ export type Overrides = Partial<PaywallConfig>;
 
 export const quietLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
+/**
+ * One NUT-13 seed per database: a seed's counters live in that database, so two databases sharing a seed would derive
+ * the same outputs (the library recovers from that, see T-CTR-1, but tests should not depend on it).
+ */
+const seeds = new Map<D1Database, string>();
+function seedFor(db: D1Database): string {
+  let s = seeds.get(db);
+  if (!s) seeds.set(db, (s = hex(64)));
+  return s;
+}
+
 export function makePaywall(db: D1Database, o: Overrides = {}) {
   return createPaywall({
-    db, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: TEST_CFG.walletSeed,
+    db, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: seedFor(db),
     mints: [TESTNUT], publicBaseUrl: "https://paywall.test", priceSats: 10, logger: quietLogger,
     ...o,
   });

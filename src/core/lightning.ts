@@ -11,7 +11,7 @@ import {
   sats, sumSats, totalHeld, type OpRow,
 } from "./store.js";
 import { requireKey } from "./topup.js";
-import { NUT_QUOTE_ISSUED, getWallet, nut20Key } from "./wallet.js";
+import { NUT_QUOTE_ISSUED, getWallet, isCounterReuse, nut20Key, skipCounterAhead } from "./wallet.js";
 
 export interface LightningTopup {
   opId: string;
@@ -132,6 +132,15 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
         keysetId: op.keyset_id ?? undefined, ...(locked ? { privkey: (await nut20Key(ctx)).privkey } : {}),
       }, { type: "deterministic", counter: op.counter_start! });
     } catch (e) {
+      if (isCounterReuse(e)) {
+        // Nothing was issued. Skip the counter ahead, give this op a fresh block, and let the next poll mint.
+        const keysetId = op.keyset_id ?? wallet.keysetId;
+        await skipCounterAhead(ctx, keysetId, op.counter_start ?? 0);
+        const range = await new D1CounterSource(ctx.db).reserve(keysetId, COUNTER_BLOCK);
+        await ctx.db.prepare("UPDATE ecash_ops SET counter_start = ?2, counter_count = ?3 WHERE op_id = ?1 AND status = 'pending'")
+          .bind(op.op_id, range.start, range.count).run();
+        throw new PaywallError("ECASH_PENDING");
+      }
       if (!(isMintOperationError(e) && e.code === NUT_QUOTE_ISSUED)) {
         ctx.log.warn("ecash_ln_mint_failed", { op_id: op.op_id, ...errorFields(e) });
         throw new PaywallError("ECASH_PENDING");

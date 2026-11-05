@@ -11,7 +11,7 @@ import {
   COUNTER_BLOCK, D1CounterSource, bindKeyToMint, creditBatch, failOp, getKeyRow, getOpByInput, insertKeyStmt, insertOpStmt,
   newOpId, proofY, sats, sumSats, totalHeld, type KeyRow,
 } from "./store.js";
-import { NUT_ALREADY_SPENT, getWallet } from "./wallet.js";
+import { NUT_ALREADY_SPENT, getWallet, isCounterReuse, skipCounterAhead } from "./wallet.js";
 
 export interface TopupResult {
   key?: EcashKey;
@@ -45,7 +45,7 @@ function isLockedSecret(secret: string): boolean {
 }
 
 export async function topupWithToken(
-  ctx: Ctx, token: string, key?: EcashKey, opts: { minCreditSats?: number } = {},
+  ctx: Ctx, token: string, key?: EcashKey, opts: { minCreditSats?: number; retried?: boolean } = {},
 ): Promise<TopupResult> {
   // 1. Size and shape (no network).
   if (typeof token !== "string") throw new PaywallError("ECASH_TOKEN_INVALID");
@@ -144,6 +144,12 @@ export async function topupWithToken(
   try {
     proofs = await wallet.receive(decoded, { keysetId }, { type: "deterministic", counter: range.start });
   } catch (e) {
+    if (isCounterReuse(e) && !opts.retried) {
+      // Our counter went backwards; nothing was spent. Skip ahead and try once more with fresh outputs.
+      await failOp(ctx, opId, "counter_reused", true);
+      await skipCounterAhead(ctx, keysetId, range.start);
+      return topupWithToken(ctx, token, created ? undefined : key, { ...opts, retried: true });
+    }
     if (isMintOperationError(e)) {
       const spent = e.code === NUT_ALREADY_SPENT;
       await failOp(ctx, opId, spent ? "ECASH_TOKEN_SPENT" : `nut_${e.code}`, !spent);
