@@ -8,6 +8,7 @@ declare global {
       TEST_MIGRATIONS: D1Migration[];
       TEST_DBS: string[];
       MIGRATION_FILE_SQL: string;
+      ROLLBACK_SQL: string;
       TESTNUT: string;
     }
   }

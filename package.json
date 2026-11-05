@@ -4,7 +4,6 @@
   "description": "Charge per call in Cashu ecash: prepaid eck_ keys, NUT-24 HTTP 402 and an MCP adapter for Cloudflare Workers",
   "license": "MIT",
   "type": "module",
-  "private": false,
   "author": "David Stancel",
   "repository": {
     "type": "git",
@@ -24,10 +23,40 @@
   "engines": {
     "node": ">=22.4.0"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./migrations/0001_init.sql": "./migrations/0001_init.sql"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "sql",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
   "workspaces": [
     "examples/*"
   ],
-  "scripts": {},
+  "scripts": {
+    "gen": "node scripts/gen-migrations.mjs",
+    "build": "npm run gen && rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:testnut": "TESTNUT=1 vitest run",
+    "demo:token": "node scripts/testnut-token.mjs",
+    "prepack": "npm run build"
+  },
   "dependencies": {
     "@cashu/cashu-ts": "4.13.0",
     "uqr": "0.1.3"

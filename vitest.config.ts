@@ -18,6 +18,7 @@ export default defineConfig(async () => {
             TEST_MIGRATIONS: migrations,
             TEST_DBS: DBS,
             MIGRATION_FILE_SQL: readFileSync("migrations/0001_init.sql", "utf8"),
+            ROLLBACK_SQL: readFileSync("sql/0002_drop.sql", "utf8"),
             TESTNUT: live ? "1" : "0",
           },
         },
