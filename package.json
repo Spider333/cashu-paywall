@@ -1,0 +1,58 @@
+{
+  "name": "cashu-paywall",
+  "version": "0.1.0",
+  "description": "Charge per call in Cashu ecash: prepaid eck_ keys, NUT-24 HTTP 402 and an MCP adapter for Cloudflare Workers",
+  "license": "MIT",
+  "type": "module",
+  "private": false,
+  "author": "David Stancel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Spider333/cashu-paywall.git"
+  },
+  "keywords": [
+    "cashu",
+    "ecash",
+    "nut-24",
+    "http-402",
+    "mcp",
+    "cloudflare-workers",
+    "d1",
+    "paywall",
+    "lightning"
+  ],
+  "engines": {
+    "node": ">=22.4.0"
+  },
+  "workspaces": [
+    "examples/*"
+  ],
+  "scripts": {},
+  "dependencies": {
+    "@cashu/cashu-ts": "4.13.0",
+    "uqr": "0.1.3"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "@cloudflare/workers-types": "5.20261104.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.12",
+    "wrangler": "4.158.0",
+    "zod": "4.6.7"
+  }
+}
