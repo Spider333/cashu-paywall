@@ -129,6 +129,11 @@ export async function potByMint(ctx: Ctx): Promise<Map<string, { held: number; u
   return out;
 }
 
+/**
+ * Statements that store proofs in the pot as unspent. Duplicates (the same proof restored twice) are ignored, EXCEPT
+ * when `opId` held that proof as a reserved input: cashu-ts `send` returns inputs it didn't use unchanged in `keep`,
+ * and those must come back to `unspent` (the batch marked all of the op's reserved inputs spent just before).
+ */
 export async function sealProofStmts(ctx: Ctx, mintUrl: string, proofs: Proof[], opId: string): Promise<D1PreparedStatement[]> {
   const now = ctx.now();
   const out: D1PreparedStatement[] = [];
@@ -136,12 +141,13 @@ export async function sealProofStmts(ctx: Ctx, mintUrl: string, proofs: Proof[],
     const y = proofY(p.secret);
     const plain = JSONInt.stringify({ id: p.id, amount: sats(p.amount), secret: p.secret, C: p.C, ...(p.dleq ? { dleq: p.dleq } : {}) }) as string;
     const sealed = await ctx.sealer.seal(plain, y);
-    // OR IGNORE: the same proof restored twice (NUT-09) must not be stored twice.
     out.push(
       ctx.db
         .prepare(
-          `INSERT OR IGNORE INTO ecash_proofs (y, mint_url, keyset_id, amount, sealed, state, op_id, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, 'unspent', ?6, ?7, ?7)`,
+          `INSERT INTO ecash_proofs (y, mint_url, keyset_id, amount, sealed, state, op_id, created_at, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, 'unspent', ?6, ?7, ?7)
+           ON CONFLICT(y) DO UPDATE SET state = 'unspent', op_id = NULL, updated_at = ?7
+            WHERE ecash_proofs.op_id = ?6 AND ecash_proofs.state IN ('spent', 'reserved')`,
         )
         .bind(y, mintUrl, p.id, sats(p.amount), sealed, opId, now),
     );
@@ -189,6 +195,50 @@ export async function releaseProofs(ctx: Ctx, opId: string): Promise<void> {
     .prepare("UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE op_id = ?1 AND state = 'reserved'")
     .bind(opId, ctx.now())
     .run();
+}
+
+/**
+ * Settles an op's reserved inputs by what the mint says (NUT-07): SPENT ones become spent, UNSPENT ones go back to the
+ * pot. Returns null while any is PENDING at the mint (try again later).
+ */
+export async function settleReservedByState(
+  ctx: Ctx, opId: string, wallet: { checkProofsStates(p: Proof[]): Promise<Array<{ state: string }>> },
+): Promise<{ anySpent: boolean } | null> {
+  const rows = (await ctx.db.prepare("SELECT * FROM ecash_proofs WHERE op_id = ? AND state = 'reserved'").bind(opId).all<ProofRow>()).results;
+  if (rows.length === 0) return { anySpent: false };
+  const states = await wallet.checkProofsStates(await openProofs(ctx, rows));
+  if (states.some((s) => s.state === "PENDING")) return null;
+  const now = ctx.now();
+  const stmts = rows.map((r, i) =>
+    states[i]?.state === "SPENT"
+      ? ctx.db.prepare("UPDATE ecash_proofs SET state = 'spent', updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'").bind(r.y, now, opId)
+      : ctx.db.prepare("UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'").bind(r.y, now, opId));
+  await ctx.db.batch(stmts);
+  return { anySpent: states.some((s) => s.state === "SPENT") };
+}
+
+/**
+ * Fails a refund op and puts its amount back on the key, at most once: the credit runs only if THIS batch flipped the
+ * op from pending to failed (same claim pattern as creditBatch). Safe against two overlapping recovery runs.
+ */
+export async function failRefundAndGiveBack(ctx: Ctx, op: Pick<OpRow, "op_id" | "key_hash" | "amount">, code: string): Promise<boolean> {
+  const claim = randomId();
+  const res = await ctx.db.batch([
+    ctx.db
+      .prepare(
+        `UPDATE ecash_ops SET status = 'failed', updated_at = ?2,
+                detail = json_set(COALESCE(detail, '{}'), '$.error', ?3, '$.claim', ?4)
+          WHERE op_id = ?1 AND status = 'pending'`,
+      )
+      .bind(op.op_id, ctx.now(), code, claim),
+    ctx.db
+      .prepare(
+        `UPDATE ecash_keys SET balance = balance + ?1, refunded_total = MAX(refunded_total - ?1, 0)
+          WHERE key_hash = ?2 AND EXISTS (SELECT 1 FROM ecash_ops WHERE op_id = ?3 AND json_extract(detail, '$.claim') = ?4)`,
+      )
+      .bind(op.amount, op.key_hash, op.op_id, claim),
+  ]);
+  return res[1]!.meta.changes === 1;
 }
 
 export function spendReservedStmt(ctx: Ctx, opId: string): D1PreparedStatement {

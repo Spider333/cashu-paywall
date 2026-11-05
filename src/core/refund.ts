@@ -6,7 +6,7 @@ import { PaywallError } from "./errors.js";
 import type { EcashKey } from "./keys.js";
 import { errorFields } from "./redact.js";
 import {
-  COUNTER_BLOCK, D1CounterSource, KEEP_OFFSET, failOp, insertOpStmt, newOpId, openProofs, releaseProofs, reserveProofs,
+  COUNTER_BLOCK, D1CounterSource, KEEP_OFFSET, failRefundAndGiveBack, newOpId, openProofs, releaseProofs, reserveProofs,
   sats, sealProofStmts, selectProofs, spendReservedStmt, type ProofRow,
 } from "./store.js";
 import { requireKey } from "./topup.js";
@@ -21,14 +21,6 @@ export interface RefundResult {
   balanceSats: 0;
   mint: string;
   opId: string;
-}
-
-/** Puts a refund's amount back on the key (the user never got the token). */
-export async function giveBackRefund(ctx: Ctx, keyHash: string, amount: number): Promise<void> {
-  await ctx.db
-    .prepare("UPDATE ecash_keys SET balance = balance + ?1, refunded_total = MAX(refunded_total - ?1, 0) WHERE key_hash = ?2")
-    .bind(amount, keyHash)
-    .run();
 }
 
 export async function refund(ctx: Ctx, key: EcashKey): Promise<RefundResult> {
@@ -71,8 +63,7 @@ export async function refund(ctx: Ctx, key: EcashKey): Promise<RefundResult> {
 
     if (!(await reserveProofs(ctx, picked, opId))) {
       // Another refund or melt took some of these proofs. Undo and retry with a fresh selection.
-      await giveBackRefund(ctx, row.key_hash, B);
-      await failOp(ctx, opId, "reserve_conflict", false);
+      await failRefundAndGiveBack(ctx, { op_id: opId, key_hash: row.key_hash, amount: B }, "reserve_conflict");
       continue;
     }
     try {
@@ -102,8 +93,7 @@ async function runRefundSwap(
     if (isMintOperationError(e)) {
       // The mint refused: nothing moved. Release the proofs and restore the balance at once.
       await releaseProofs(ctx, r.opId);
-      await giveBackRefund(ctx, r.keyHash, r.B);
-      await failOp(ctx, r.opId, `nut_${e.code}`, false);
+      await failRefundAndGiveBack(ctx, { op_id: r.opId, key_hash: r.keyHash, amount: r.B }, `nut_${e.code}`);
       if (isCounterReuse(e)) throw new CounterReused();
       ctx.log.error("ecash_refund_rejected", { kid: r.kid, op_id: r.opId, ...errorFields(e) });
       throw new PaywallError("ECASH_MINT_UNAVAILABLE", { message: "The mint refused the refund swap. Your balance is restored; try again later." });

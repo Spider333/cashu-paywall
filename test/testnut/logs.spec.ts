@@ -42,7 +42,7 @@ describe("T-LOG-1 no secrets in logs", () => {
     };
     // No `logger` passed: the library's default console logger (with redaction) is what we inspect.
     const pw = createPaywall({
-      db: env.DB_LOG, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: "ab".repeat(64),
+      db: env.DB_LOG, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: Array.from(crypto.getRandomValues(new Uint8Array(64)), (b) => b.toString(16).padStart(2, "0")).join(""),
       mints: [TESTNUT], publicBaseUrl: "https://paywall.test", priceSats: 5, fetch: lnurl,
       melt: { lightningAddress: "demo@ln.example", minSats: 1000, keepSats: 100 },
     });

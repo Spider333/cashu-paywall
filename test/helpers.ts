@@ -60,3 +60,11 @@ export function fakeLimiter(limit: number) {
 export async function keyRow(db: D1Database, key: EcashKey) {
   return db.prepare("SELECT * FROM ecash_keys WHERE key_hash = ?").bind(await keyHash(key)).first<{ balance: number; calls: number; mint_url: string | null }>();
 }
+
+/** Opens sealed pot rows with the test proof key (tests only). */
+export async function openRows(rows: unknown[]) {
+  const { openProofs } = await import("../src/core/store");
+  const { buildCtx } = await import("../src/core/context");
+  const ctx = buildCtx({ db: {} as D1Database, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: "00".repeat(64), mints: [TESTNUT], publicBaseUrl: "https://x.test" });
+  return openProofs(ctx, rows as never);
+}

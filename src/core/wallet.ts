@@ -71,6 +71,9 @@ export function isCounterReuse(e: unknown): boolean {
 
 /** Jumps this keyset's counter far past anything used, so the next op derives fresh outputs. */
 export async function skipCounterAhead(ctx: Ctx, keysetId: string, from: number): Promise<void> {
-  await new D1CounterSource(ctx.db).advanceToAtLeast(keysetId, from + 100_000);
+  // A random jump of 2^20 to 2^20 + 2^27, so repeated restores (or a second copy of the database) don't land on each other.
+  // NUT-13 counters are hardened BIP32 indexes (< 2^31): this leaves room for hundreds of skips.
+  const jump = 1_048_576 + Math.floor(Math.random() * 134_217_728);
+  await new D1CounterSource(ctx.db).advanceToAtLeast(keysetId, from + jump);
   ctx.log.warn("ecash_counter_reused", { keyset: keysetId.slice(0, 16), from });
 }

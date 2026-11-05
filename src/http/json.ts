@@ -20,6 +20,8 @@ export function errorResponse(ctx: Ctx, e: unknown, extraHeaders: Record<string,
   if (pe.httpStatus === 429) headers["Retry-After"] = "60";
   if (pe.httpStatus === 503) headers["Retry-After"] = "30";
   if (pe.paymentRequest) headers["X-Cashu"] = pe.paymentRequest;
+  // A key created by this request (e.g. an ECASH_PENDING top-up) is the caller's only copy: always hand it back.
+  if (typeof pe.details?.key === "string") headers["X-Ecash-Key"] = pe.details.key;
   return json(errorBody(pe, topupUrl(ctx)), pe.httpStatus, headers);
 }
 

@@ -1,16 +1,19 @@
 // Recovery job (PRD 6.6): finish or roll back any op left pending for more than 15 minutes.
+// Safe to run twice at once (the 03:00 daily cron and the */10 cron overlap): every settlement is guarded by a
+// conditional pending -> done/failed flip with a claim id, and proof updates are idempotent.
 import { CheckStateEnum, MeltQuoteState } from "@cashu/cashu-ts";
 import type { Ctx } from "../core/context.js";
 import { settleLightningOp } from "../core/lightning.js";
 import { errorFields } from "../core/redact.js";
-import { giveBackRefund } from "../core/refund.js";
 import {
-  COUNTER_BLOCK, creditBatch, failOp, openProofs, opDetail, releaseProofs, sealProofStmts, spendReservedStmt, sumSats,
-  type OpRow, type ProofRow,
+  COUNTER_BLOCK, creditBatch, failOp, failRefundAndGiveBack, opDetail, releaseProofs, sealProofStmts, settleReservedByState,
+  sumSats, type OpRow,
 } from "../core/store.js";
 import { getWallet } from "../core/wallet.js";
 
 export const STUCK_AFTER_MS = 15 * 60 * 1000;
+/** An unpaid Lightning quote still pending after this long is given up (most mints expire quotes within an hour). */
+const LIGHTNING_GIVE_UP_MS = 24 * 60 * 60 * 1000;
 
 export async function recoverStuckOps(ctx: Ctx): Promise<number> {
   const stuck = await ctx.db
@@ -19,20 +22,26 @@ export async function recoverStuckOps(ctx: Ctx): Promise<number> {
     .all<OpRow>();
   let recovered = 0;
   for (const op of stuck.results) {
+    let done = false;
     try {
-      if (await recoverOp(ctx, op)) recovered++;
+      done = await recoverOp(ctx, op);
     } catch (e) {
       ctx.log.warn("ecash_recovery_retry_later", { op_id: op.op_id, kind: op.kind, ...errorFields(e) });
+    }
+    if (done) recovered++;
+    else {
+      // Not final yet: move it to the back of the queue so 20 stuck ops can't starve the rest.
+      await ctx.db.prepare("UPDATE ecash_ops SET updated_at = ?2 WHERE op_id = ?1 AND status = 'pending'").bind(op.op_id, ctx.now()).run();
     }
   }
   return recovered;
 }
 
+/** Rebuilds the op's outputs from the seed (NUT-09) and keeps those still unspent at the mint. */
 async function restoreOutputs(ctx: Ctx, op: OpRow) {
   const wallet = await getWallet(ctx, op.mint_url);
   const r = await wallet.restore(op.counter_start!, op.counter_count ?? COUNTER_BLOCK, { keysetId: op.keyset_id ?? undefined });
   if (r.proofs.length === 0) return r.proofs;
-  // Keep only outputs that are still unspent at the mint (a restore returns everything the mint ever signed).
   const states = await wallet.checkProofsStates(r.proofs);
   return r.proofs.filter((_, i) => states[i]?.state === CheckStateEnum.UNSPENT);
 }
@@ -66,27 +75,24 @@ async function recoverOp(ctx: Ctx, op: OpRow): Promise<boolean> {
     }
     case "topup_lightning": {
       const s = await settleLightningOp(ctx, op);
-      return s.state !== "UNPAID";
+      if (s.state !== "UNPAID") return true;
+      if (ctx.now() - op.created_at > LIGHTNING_GIVE_UP_MS) {
+        await failOp(ctx, op.op_id, "unpaid_given_up", false);
+        return true;
+      }
+      return false;
     }
     case "refund": {
-      const reserved = await ctx.db.prepare("SELECT * FROM ecash_proofs WHERE op_id = ? AND state = 'reserved'").bind(op.op_id).all<ProofRow>();
-      let anySpent = false;
-      if (reserved.results.length > 0) {
-        const inputs = await openProofs(ctx, reserved.results);
-        const states = await wallet.checkProofsStates(inputs);
-        if (states.some((s) => s.state === CheckStateEnum.PENDING)) return false;
-        anySpent = states.some((s) => s.state === CheckStateEnum.SPENT);
-      }
-      if (!anySpent) {
-        await releaseProofs(ctx, op.op_id);
-      } else {
+      // Settle each reserved input by its state at the mint; unused ones go back to the pot.
+      const settled = await settleReservedByState(ctx, op.op_id, wallet);
+      if (!settled) return false;
+      if (settled.anySpent) {
         // The swap happened but the user never received the token: our outputs (send and keep) go back to the pot.
         const proofs = await restoreOutputs(ctx, op);
-        await ctx.db.batch([spendReservedStmt(ctx, op.op_id), ...(await sealProofStmts(ctx, op.mint_url, proofs, op.op_id))]);
+        await ctx.db.batch(await sealProofStmts(ctx, op.mint_url, proofs, op.op_id));
       }
-      await giveBackRefund(ctx, op.key_hash!, op.amount);
-      await failOp(ctx, op.op_id, anySpent ? "recovered_restored" : "recovered_unspent", false);
-      ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: anySpent ? "restored_and_given_back" : "given_back" });
+      const gaveBack = await failRefundAndGiveBack(ctx, op, settled.anySpent ? "recovered_restored" : "recovered_unspent");
+      ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: gaveBack ? "given_back" : "already_settled" });
       return true;
     }
     case "melt": {
@@ -98,34 +104,27 @@ async function recoverOp(ctx: Ctx, op: OpRow): Promise<boolean> {
       }
       const q = await wallet.checkMeltQuoteBolt11(quoteId);
       if (q.state === MeltQuoteState.PENDING) return false;
-      if (q.state === MeltQuoteState.PAID) {
-        const change = await restoreOutputs(ctx, op);
-        await ctx.db.batch([
-          spendReservedStmt(ctx, op.op_id),
-          ...(await sealProofStmts(ctx, op.mint_url, change, op.op_id)),
-          ctx.db
-            .prepare(
-              `UPDATE ecash_ops SET status = 'done', updated_at = ?2, detail = json_set(COALESCE(detail, '{}'), '$.preimage', ?3, '$.recovered', 1)
-                WHERE op_id = ?1 AND status = 'pending'`,
-            )
-            .bind(op.op_id, ctx.now(), q.payment_preimage ?? null),
-        ]);
-        ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: "melt_paid" });
-        return true;
-      }
-      // UNPAID: the Lightning payment did not happen. The pre-swap may have, so check our inputs before releasing.
-      const reserved = await ctx.db.prepare("SELECT * FROM ecash_proofs WHERE op_id = ? AND state = 'reserved'").bind(op.op_id).all<ProofRow>();
-      const inputs = reserved.results.length ? await openProofs(ctx, reserved.results) : [];
-      const states = inputs.length ? await wallet.checkProofsStates(inputs) : [];
-      if (states.some((s) => s.state === CheckStateEnum.PENDING)) return false;
-      if (states.some((s) => s.state === CheckStateEnum.SPENT)) {
+      // PAID or UNPAID: settle our reserved inputs by their real state, then keep whatever outputs we got (pre-swap
+      // keep, unused send, melt change).
+      const settled = await settleReservedByState(ctx, op.op_id, wallet);
+      if (!settled) return false;
+      if (settled.anySpent) {
         const proofs = await restoreOutputs(ctx, op);
-        await ctx.db.batch([spendReservedStmt(ctx, op.op_id), ...(await sealProofStmts(ctx, op.mint_url, proofs, op.op_id))]);
-      } else {
-        await releaseProofs(ctx, op.op_id);
+        await ctx.db.batch(await sealProofStmts(ctx, op.mint_url, proofs, op.op_id));
       }
-      await failOp(ctx, op.op_id, "melt_unpaid", false);
-      ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: "melt_released" });
+      if (q.state === MeltQuoteState.PAID) {
+        await ctx.db
+          .prepare(
+            `UPDATE ecash_ops SET status = 'done', updated_at = ?2, detail = json_set(COALESCE(detail, '{}'), '$.preimage', ?3, '$.recovered', 1)
+              WHERE op_id = ?1 AND status = 'pending'`,
+          )
+          .bind(op.op_id, ctx.now(), q.payment_preimage ?? null)
+          .run();
+        ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: "melt_paid" });
+      } else {
+        await failOp(ctx, op.op_id, "melt_unpaid", false);
+        ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: "melt_released" });
+      }
       return true;
     }
   }

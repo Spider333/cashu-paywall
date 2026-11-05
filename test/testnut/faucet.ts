@@ -79,3 +79,15 @@ export async function claim(token: string): Promise<number> {
   const got = await w.receive(token);
   return got.reduce((s, p) => s + p.amount.toNumber(), 0);
 }
+
+/** The pot in D1 must match the mint: every proof we call unspent is UNSPENT at the mint. Returns their sum. */
+export async function potMatchesMint(db: D1Database, makeOpen: (rows: unknown[]) => Promise<Proof[]>): Promise<number> {
+  const rows = (await db.prepare("SELECT * FROM ecash_proofs WHERE state = 'unspent'").all()).results;
+  if (rows.length === 0) return 0;
+  const proofs = await makeOpen(rows);
+  const w = testWallet();
+  await w.loadMint();
+  const states = await w.checkProofsStates(proofs);
+  if (!states.every((s) => s.state === "UNSPENT")) throw new Error("D1 says unspent but the mint disagrees");
+  return proofs.reduce((s, p) => s + p.amount.toNumber(), 0);
+}

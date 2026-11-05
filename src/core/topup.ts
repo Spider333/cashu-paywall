@@ -45,7 +45,7 @@ function isLockedSecret(secret: string): boolean {
 }
 
 export async function topupWithToken(
-  ctx: Ctx, token: string, key?: EcashKey, opts: { minCreditSats?: number; retried?: boolean } = {},
+  ctx: Ctx, token: string, key?: EcashKey, opts: { minCreditSats?: number; retries?: number } = {},
 ): Promise<TopupResult> {
   // 1. Size and shape (no network).
   if (typeof token !== "string") throw new PaywallError("ECASH_TOKEN_INVALID");
@@ -144,11 +144,11 @@ export async function topupWithToken(
   try {
     proofs = await wallet.receive(decoded, { keysetId }, { type: "deterministic", counter: range.start });
   } catch (e) {
-    if (isCounterReuse(e) && !opts.retried) {
-      // Our counter went backwards; nothing was spent. Skip ahead and try once more with fresh outputs.
+    if (isCounterReuse(e) && (opts.retries ?? 0) < 2) {
+      // Our counter went backwards; nothing was spent. Skip ahead and try again with fresh outputs.
       await failOp(ctx, opId, "counter_reused", true);
       await skipCounterAhead(ctx, keysetId, range.start);
-      return topupWithToken(ctx, token, created ? undefined : key, { ...opts, retried: true });
+      return topupWithToken(ctx, token, created ? undefined : key, { ...opts, retries: (opts.retries ?? 0) + 1 });
     }
     if (isMintOperationError(e)) {
       const spent = e.code === NUT_ALREADY_SPENT;
@@ -159,7 +159,7 @@ export async function topupWithToken(
     }
     // Network failure, timeout, 5xx: the mint may or may not have swapped. Leave the op pending for the recovery job.
     ctx.log.warn("ecash_topup_pending", { kid, op_id: opId, mint_host: hostOf(mintUrl), ...errorFields(e) });
-    throw new PaywallError("ECASH_PENDING");
+    throw pendingError(created, kid);
   }
   await ctx.hooks.afterSwap?.("topup_token");
 
@@ -170,7 +170,7 @@ export async function topupWithToken(
     await creditBatch(ctx, { op_id: opId, mint_url: mintUrl, key_hash: keyHash }, proofs, credited, realFee);
   } catch (e) {
     ctx.log.error("ecash_credit_failed", { kid, op_id: opId, ...errorFields(e) });
-    throw new PaywallError("ECASH_PENDING");
+    throw pendingError(created, kid);
   }
   const after = await getKeyRow(ctx, keyHash);
   ctx.log.info("ecash_topup", { kid, op_id: opId, mint_host: hostOf(mintUrl), amount, fee: realFee, balance_after: after?.balance });
@@ -178,6 +178,17 @@ export async function topupWithToken(
     ...(created ? { key: created } : {}),
     kid, creditedSats: credited, feeSats: realFee, balanceSats: after?.balance ?? balanceBefore + credited, mint: mintUrl, opId,
   };
+}
+
+/**
+ * ECASH_PENDING after the op was written. If this top-up created the key, the key MUST go back to the caller now:
+ * the recovery job will credit it, and it is shown nowhere else.
+ */
+function pendingError(created: EcashKey | undefined, kid: string): PaywallError {
+  if (!created) return new PaywallError("ECASH_PENDING");
+  return new PaywallError("ECASH_PENDING", {
+    details: { key: created, kid, warning: "Save this key now; it is shown once. Your credit lands on it within 15 minutes." },
+  });
 }
 
 /** The payment request attached to errors that paying would fix. */

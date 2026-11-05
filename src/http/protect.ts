@@ -17,7 +17,7 @@ export interface PaymentHeaders {
   balanceSats: number;
 }
 
-export function paymentRequiredResponse(ctx: Ctx, priceSats: number, description?: string): Response {
+export function paymentRequiredResponse(ctx: Ctx, priceSats: number, description?: string, extra: Record<string, unknown> = {}): Response {
   const pr = paymentRequest(ctx, priceSats, { description });
   return json(
     {
@@ -29,6 +29,7 @@ export function paymentRequiredResponse(ctx: Ctx, priceSats: number, description
       mints: ctx.mints,
       payment_request: pr,
       topup_url: topupUrl(ctx),
+      ...extra,
     },
     402,
     { "X-Cashu": pr },
@@ -88,7 +89,7 @@ export function protect(ctx: Ctx, handler: PaidHandler, opts: { priceSats: numbe
       if (!d.ok) {
         if (d.error.code === "ECASH_INSUFFICIENT_BALANCE") {
           // Same as no payment (PRD N-5), plus the balance so the client knows why.
-          const res = paymentRequiredResponse(ctx, price, opts.description);
+          const res = paymentRequiredResponse(ctx, price, opts.description, { balance_sats: d.error.details?.balance_sats ?? 0 });
           return created ? withPaymentHeaders(res, { key: created, kid: "", balanceSats: Number(d.error.details?.balance_sats ?? 0) }) : res;
         }
         if (d.error.code === "ECASH_KEY_INVALID" && !(await rateLimit(ctx, "badkey", clientIp(request)))) {

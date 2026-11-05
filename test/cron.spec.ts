@@ -98,3 +98,20 @@ describe("cleanup (PRD 6.7, P1-2)", () => {
     expect(r).toEqual({ recovered: 0, melted: [], skipped: [], invariantOk: true, deletedEmptyKeys: 0 });
   });
 });
+
+describe("review #5: recovery can't be starved", () => {
+  it("ops that can't finish move to the back of the queue, so the next run reaches the others", async () => {
+    const old = Date.now() - 60 * 60 * 1000;
+    for (let i = 0; i < 25; i++) {
+      await db().prepare(
+        "INSERT INTO ecash_ops (op_id, kind, status, mint_url, input_id, amount, counter_start, counter_count, created_at, updated_at) VALUES (?, 'topup_lightning', 'pending', 'https://testnut.cashu.space', ?, 10, 1, 64, ?, ?)",
+      ).bind(crypto.randomUUID(), `q${i}`, old, old + i).run();
+    }
+    const down = makePaywall(db(), { fetch: async () => { throw new TypeError("mint down (simulated)"); } });
+    await down.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() });
+    const untouched = await db().prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE updated_at < ?").bind(old + 1000).first<{ n: number }>();
+    expect(untouched!.n).toBe(5); // 20 attempted and moved back; the 5 behind them come first next time
+    const firstNext = await db().prepare("SELECT input_id FROM ecash_ops WHERE status = 'pending' ORDER BY updated_at LIMIT 1").first<{ input_id: string }>();
+    expect(firstNext!.input_id).toBe("q20");
+  });
+});

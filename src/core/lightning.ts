@@ -1,13 +1,13 @@
 // Lightning top-up (PRD 6.5 D): a NUT-04 mint quote, NUT-20 locked when the mint supports it. The quote id never
 // leaves the server: the browser only sees our op id.
-import { MintQuoteState, isMintOperationError } from "@cashu/cashu-ts";
+import { MintQuoteState, isMintOperationError, type Proof } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
 import { hostOf, topupUrl } from "./context.js";
 import { PaywallError } from "./errors.js";
 import { hashKey, newKey, type EcashKey } from "./keys.js";
 import { errorFields } from "./redact.js";
 import {
-  COUNTER_BLOCK, D1CounterSource, creditBatch, failOp, getKeyRow, getOp, insertKeyStmt, insertOpStmt, newOpId, opDetail,
+  COUNTER_BLOCK, D1CounterSource, bindKeyToMint, creditBatch, failOp, getKeyRow, getOp, insertKeyStmt, insertOpStmt, newOpId, opDetail,
   sats, sumSats, totalHeld, type OpRow,
 } from "./store.js";
 import { requireKey } from "./topup.js";
@@ -75,7 +75,9 @@ export async function startLightningTopup(ctx: Ctx, amountSats: number, key?: Ec
   });
   if (created) await ctx.db.batch([insertKeyStmt(ctx, keyHash, kid, mintUrl), opStmt]);
   else {
-    await ctx.db.prepare("UPDATE ecash_keys SET mint_url = ?1 WHERE key_hash = ?2 AND mint_url IS NULL").bind(mintUrl, keyHash).run();
+    // Bind before writing the op; a racing first top-up from another mint wins -> mismatch, no op written.
+    const bound = (await bindKeyToMint(ctx, keyHash, mintUrl))?.mint_url;
+    if (bound !== mintUrl) throw new PaywallError("ECASH_MINT_MISMATCH", { details: { key_mint: bound } });
     await opStmt.run();
   }
   ctx.log.info("ecash_ln_quote", { kid, op_id: opId, mint_host: hostOf(mintUrl), amount: amountSats });
@@ -125,7 +127,7 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
   }
   const issued = quote.amount_issued !== undefined ? sats(quote.amount_issued) >= op.amount : quote.state === MintQuoteState.ISSUED;
   const locked = opDetail(op).locked === true;
-  let proofs;
+  let proofs: Proof[] | undefined;
   if (!issued) {
     try {
       proofs = await wallet.mintProofsBolt11(op.amount, quote, {
@@ -133,24 +135,45 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
       }, { type: "deterministic", counter: op.counter_start! });
     } catch (e) {
       if (isCounterReuse(e)) {
-        // Nothing was issued. Skip the counter ahead, give this op a fresh block, and let the next poll mint.
-        const keysetId = op.keyset_id ?? wallet.keysetId;
-        await skipCounterAhead(ctx, keysetId, op.counter_start ?? 0);
-        const range = await new D1CounterSource(ctx.db).reserve(keysetId, COUNTER_BLOCK);
-        await ctx.db.prepare("UPDATE ecash_ops SET counter_start = ?2, counter_count = ?3 WHERE op_id = ?1 AND status = 'pending'")
-          .bind(op.op_id, range.start, range.count).run();
-        throw new PaywallError("ECASH_PENDING");
-      }
-      if (!(isMintOperationError(e) && e.code === NUT_QUOTE_ISSUED)) {
+        // Either our counter went backwards, or a racing poll already minted with these outputs. Ask the quote first:
+        // if it was issued, the restore below finds the proofs in this same range.
+        const again = await wallet.checkMintQuoteBolt11(op.input_id!).catch(() => null);
+        const nowIssued = again && (again.amount_issued !== undefined ? sats(again.amount_issued) >= op.amount : again.state === MintQuoteState.ISSUED);
+        if (!nowIssued) {
+          // Nothing issued: skip the counter ahead and give this op a fresh block. The old range is kept in detail so a
+          // restore still looks there too.
+          const keysetId = op.keyset_id ?? wallet.keysetId;
+          await skipCounterAhead(ctx, keysetId, op.counter_start ?? 0);
+          const range = await new D1CounterSource(ctx.db).reserve(keysetId, COUNTER_BLOCK);
+          await ctx.db
+            .prepare(
+              `UPDATE ecash_ops SET counter_start = ?2, counter_count = ?3,
+                      detail = json_set(COALESCE(detail, '{}'), '$.prev_ranges',
+                        json_insert(COALESCE(json_extract(detail, '$.prev_ranges'), json('[]')), '$[#]', json_array(?4, ?5)))
+                WHERE op_id = ?1 AND status = 'pending'`,
+            )
+            .bind(op.op_id, range.start, range.count, op.counter_start, op.counter_count ?? COUNTER_BLOCK)
+            .run();
+          throw new PaywallError("ECASH_PENDING");
+        }
+      } else if (!(isMintOperationError(e) && e.code === NUT_QUOTE_ISSUED)) {
         ctx.log.warn("ecash_ln_mint_failed", { op_id: op.op_id, ...errorFields(e) });
         throw new PaywallError("ECASH_PENDING");
       }
     }
   }
   if (!proofs) {
-    // Already issued (a crash after minting, or a racing poll): rebuild our outputs from the seed (NUT-09).
-    const r = await wallet.restore(op.counter_start!, op.counter_count ?? COUNTER_BLOCK, { keysetId: op.keyset_id ?? undefined });
-    proofs = r.proofs;
+    // Already issued (a crash after minting, or a racing poll): rebuild our outputs from the seed (NUT-09), in the
+    // op's current counter range and any earlier ones.
+    const prev = (opDetail(op).prev_ranges as Array<[number, number]> | undefined) ?? [];
+    for (const [start, count] of [[op.counter_start!, op.counter_count ?? COUNTER_BLOCK] as [number, number], ...prev]) {
+      const r = await wallet.restore(start, count, { keysetId: op.keyset_id ?? undefined });
+      if (r.proofs.length > 0) {
+        proofs = r.proofs;
+        break;
+      }
+    }
+    proofs ??= [];
   }
   const amount = sumSats(proofs);
   if (amount <= 0) throw new PaywallError("ECASH_PENDING");

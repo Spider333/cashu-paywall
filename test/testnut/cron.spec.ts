@@ -59,12 +59,12 @@ describe("melt", () => {
     const r = await pw.topupWithToken(t);
     expect(r.balanceSats).toBe(3002 - faucet.feeFor(t));
     expect((await pw.debit(r.key!, r.balanceSats - 3000 > 0 ? r.balanceSats - 3000 : 1)).ok).toBe(true);
-    return { pw, key: r.key!, left: (await pw.balance(r.key!)).balanceSats };
+    return { pw, key: r.key!, left: (await pw.balance(r.key!)).balanceSats, pot: r.creditedSats };
   }
 
   it("T-MELT-1: pot 3,000, owed 0, keep 500, min 2,000 -> melts <= 2,500 and pays the invoice", async () => {
     const stub = lnurlStub();
-    const { pw, key, left } = await potOf3000({ fetch: stub.fetch, melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 } });
+    const { pw, key, left, pot } = await potOf3000({ fetch: stub.fetch, melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 } });
     expect((await pw.debit(key, left)).ok).toBe(true);
     const r = await pw.scheduled(DAILY);
     expect(r.invariantOk).toBe(true);
@@ -85,6 +85,11 @@ describe("melt", () => {
     const held = await db().prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'").first<{ s: number }>();
     expect(held!.s).toBeGreaterThan(0);
     expect(held!.s).toBeLessThanOrEqual(1000);
+    // Review #1: nothing vanished. D1's pot matches the mint and equals pot before - melted - fees.
+    const { potMatchesMint } = await import("./faucet");
+    const { openRows } = await import("../helpers");
+    expect(await potMatchesMint(db(), openRows)).toBe(held!.s);
+    expect(held!.s).toBe(pot - r.melted[0]!.amountSats - r.melted[0]!.feeSats);
     console.log(`[T-MELT-1] melted ${r.melted[0]!.amountSats} sats, fee ${r.melted[0]!.feeSats}, left ${held!.s}, preimage ${detail.preimage === null ? "null (testnut)" : "present"}`);
   });
 
