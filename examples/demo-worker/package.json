@@ -4,6 +4,23 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "cashu-paywall": "file:../.."
+    "cashu-paywall": "file:../..",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "description": "cashu-paywall demo Worker: nut facts for test sats over NUT-24 and MCP",
+  "scripts": {
+    "dev-vars": "node scripts/dev-vars.mjs",
+    "db:local": "wrangler d1 migrations apply cashu-paywall-demo --local",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "wrangler": "4.158.0",
+    "vitest": "4.1.12",
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "@cloudflare/workers-types": "5.20261104.1",
+    "typescript": "5.9.3"
   }
 }
