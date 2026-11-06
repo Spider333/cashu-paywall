@@ -1,31 +1,52 @@
 name: ci
-# Runs on main and by hand only, so pushes to build branches and draft PRs on the private repo use no Actions
-# minutes until the owner decides. Add `pull_request:` when the repo goes public.
+
 on:
   push:
     branches: [main]
+  pull_request:
+  # The live suites need testnut.cashu.space, a public test mint that is sometimes slow or reset.
+  # They run only when started by hand, so a testnut outage never fails a pull request.
   workflow_dispatch:
+    inputs:
+      live:
+        description: Also run the live testnut suites (library and demo)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run typecheck
+        working-directory: examples/demo-worker
+      # Unit tests: Workers vitest pool with a local D1, no network.
+      - run: npm test
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm run typecheck
-      # Unit tests (miniflare D1, no network). T-DEB-1 runs 20 rounds inside the suite.
-      - run: npm test
-      # Live tests against testnut.cashu.space (test sats only; its Lightning is fake).
+      # Test sats only: testnut's Lightning is fake.
       - run: npm run test:testnut
-      - run: npx tsc --noEmit
-        working-directory: examples/demo-worker
-      - run: npx vitest run
+      - run: npm test
         working-directory: examples/demo-worker

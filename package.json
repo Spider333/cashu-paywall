@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "description": "Charge per call in Cashu ecash: prepaid eck_ keys, NUT-24 HTTP 402 and an MCP adapter for Cloudflare Workers",
   "license": "MIT",
-  "type": "module",
   "author": "David Stancel",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Spider333/cashu-paywall.git"
   },
+  "bugs": {
+    "url": "https://github.com/Spider333/cashu-paywall/issues"
+  },
+  "homepage": "https://github.com/Spider333/cashu-paywall#readme",
   "keywords": [
     "cashu",
     "ecash",
@@ -18,7 +22,10 @@
     "cloudflare-workers",
     "d1",
     "paywall",
-    "lightning"
+    "lightning",
+    "nut-18",
+    "micropayments",
+    "ai-agents"
   ],
   "engines": {
     "node": ">=22.4.0"
@@ -34,7 +41,9 @@
       "types": "./dist/mcp/index.d.ts",
       "import": "./dist/mcp/index.js"
     },
-    "./migrations/0001_init.sql": "./migrations/0001_init.sql"
+    "./migrations/0001_init.sql": "./migrations/0001_init.sql",
+    "./sql/drop-all.sql": "./sql/drop-all.sql",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -49,18 +58,18 @@
     "examples/*"
   ],
   "scripts": {
-    "gen": "node scripts/gen-migrations.mjs",
     "build": "npm run gen && rm -rf dist && tsc -p tsconfig.json",
+    "gen": "node scripts/gen-migrations.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:testnut": "TESTNUT=1 vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "demo:token": "node scripts/testnut-token.mjs",
-    "prepack": "npm run build",
     "demo:check": "node scripts/demo-check.mjs",
     "bench:cpu": "node bench/cpu.mjs",
     "bench:bundle": "node bench/bundle.mjs",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@cashu/cashu-ts": "4.13.0",
