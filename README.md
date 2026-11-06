@@ -1,180 +1,170 @@
 # cashu-paywall
 
+[![ci](https://github.com/Spider333/cashu-paywall/actions/workflows/ci.yml/badge.svg)](https://github.com/Spider333/cashu-paywall/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Charge per call in [Cashu](https://cashu.space) ecash, on Cloudflare Workers and MCP servers.
 
-- **Prepaid keys:** a caller pays with an ecash token (or a Lightning invoice) and gets a bearer key `eck_…` holding sats of credit. Every paid call takes credit off the key in one atomic D1 statement. The mint is never touched per call.
-- **NUT-24 HTTP 402:** wrap any route with `paywall.protect()`. Without payment it answers `402 Payment Required` with `X-Cashu: creqA…`. A retry carrying `X-Cashu: cashuB…` is served.
-- **MCP:** `cashu-paywall/mcp` adds `ecash_topup`, `ecash_balance` and `ecash_refund` tools, plus `withEcashCharge()` to price your own tools.
-- **Lightning top-up page** at `/ecash` (NUT-04, NUT-20 locked quotes), refunds as a fresh token, and a daily cron that melts earned sats to your Lightning address.
-- **Crash-safe:** every mint call is recorded before it is made. Outputs are deterministic (NUT-13), so a recovery job can rebuild anything the mint signed (NUT-09).
+- **NUT-24 HTTP 402.** Wrap a route with `paywall.protect()`. An unpaid request gets `402 Payment Required` with `X-Cashu: creqA…`, and a retry that carries `X-Cashu: cashuB…` is served.
+- **Prepaid keys.** A payment becomes credit on a bearer key `eck_…`. Each paid call takes credit off the key in one D1 statement, without calling the mint.
+- **MCP.** `cashu-paywall/mcp` prices your tools and adds `ecash_topup`, `ecash_balance` and `ecash_refund`, so an agent can pay with no account.
+- **Lightning and refunds.** A top-up page at `/ecash` (Lightning invoice or pasted token), refunds as a fresh token, and an optional daily melt of earnings to your Lightning address.
 
-> **Status: v0.1.0, unreleased.** Tested against `testnut.cashu.space` (test sats; its Lightning is fake). Read [Custody and risks](#custody-and-risks) before you point it at a real mint.
+**Why.** NUT-24 defines HTTP 402 for Cashu, but the NUTs README lists no wallet and no mint that implements it (checked 6 Nov 2026), and we know of no other server library for it. MCP servers had no way to take ecash either. This is a server-side NUT-24 implementation, with an MCP adapter on top.
 
-NUTs used: 00–05, 07, 09, 10/11 (to refuse locked tokens), 12, 13, 18, 20, 24, 26.
+> **Status: 0.1.0, unreleased, unaudited.** Tested only against `testnut.cashu.space`, a test mint whose Lightning is fake. Use a test mint first. Read [docs/security.md](docs/security.md) before you point it at a mint with real sats.
 
-## Install
+## Try it in 5 minutes
 
-```sh
-npm install cashu-paywall
-# for the MCP adapter, also:
-npm install @modelcontextprotocol/sdk zod
-```
-
-Requirements: Node 22.4+ to build and test (cashu-ts 4.13.0), a Cloudflare Worker with a D1 database. `@cashu/cashu-ts` is pinned to exactly 4.13.0.
-
-Apply the schema to your D1 database (it holds nothing else):
+You need Node 22.4+ and nothing else: no Cloudflare account, no wallet, no real sats. The demo Worker sells "nut facts" for 5 test sats each.
 
 ```sh
-npx wrangler d1 execute <your-db> --local --file node_modules/cashu-paywall/migrations/0001_init.sql
-# or point migrations_dir at node_modules/cashu-paywall/migrations in wrangler.jsonc
+git clone https://github.com/Spider333/cashu-paywall.git && cd cashu-paywall
+npm install && npm run build          # 26 s on our VM
+cd examples/demo-worker
+npm run dev-vars                      # fresh local secrets in .dev.vars (gitignored)
+npm run db:local                      # create the local D1 tables
+npm run dev                           # leave running: http://localhost:8787
 ```
 
-The same SQL is exported as `MIGRATIONS_SQL`.
+In a second terminal, from the repo root. First, no payment:
 
-## A paid route in a plain Worker
+```
+$ curl -si "localhost:8787/api/nut-fact?nut=24"
+HTTP/1.1 402 Payment Required
+Content-Length: 373
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+X-Cashu: creqApmFpaGFjYmY1Yzg3YWEFYXVjc2F0YW2BeBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhZHdPbmUgQ2FzaHUgTlVULCBvbmUgbGluZWFz9Q==
+
+{"error":"Payment required: pay with a Cashu token in the X-Cashu header.","code":"ECASH_PAYMENT_REQUIRED","retryable":false,"price_sats":5,"unit":"sat","mints":["https://testnut.cashu.space"],"payment_request":"creqApmFpaGFjYmY1Yzg3YWEFYXVjc2F0YW2BeBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhZHdPbmUgQ2FzaHUgTlVULCBvbmUgbGluZWFz9Q==","topup_url":"http://localhost:8787/ecash"}
+```
+
+Get a 20-sat test token from testnut and pay with it:
+
+```
+$ TOKEN=$(npm run -s demo:token -- 20)
+$ curl -si -H "X-Cashu: $TOKEN" "localhost:8787/api/nut-fact?nut=24"
+HTTP/1.1 200 OK
+Content-Length: 103
+Content-Type: application/json
+Cache-Control: no-store
+X-Ecash-Balance: 14
+X-Ecash-Key: eck_A2_uML0N0eHoY4ffPuZfhtRcST6ExilR_ng5nTAZS8c
+X-Ecash-Kid: c56bd006ae18705a
+
+{"nut":24,"title":"HTTP 402 Payment Required","url":"https://github.com/cashubtc/nuts/blob/main/24.md"}
+```
+
+20 sats in, 1 sat swap fee to the mint, 5 sats for the call: 14 sats stay on the new key. Spend them with the key, and see the token can't be used twice:
+
+```
+$ KEY=eck_A2_uML0N0eHoY4ffPuZfhtRcST6ExilR_ng5nTAZS8c
+$ curl -s -H "Authorization: Bearer $KEY" localhost:8787/ecash/balance
+{"kid":"c56bd006ae18705a","balance_sats":14,"price_sats_per_call":5,"calls_left":2,"mint":"https://testnut.cashu.space",…}
+
+$ curl -si -H "X-Cashu: $TOKEN" "localhost:8787/api/nut-fact?nut=24"
+HTTP/1.1 400 Bad Request
+{"error":"This token was already spent.","code":"ECASH_TOKEN_SPENT","retryable":false}
+```
+
+The same key works over MCP. [examples/demo-worker](examples/demo-worker) continues with the MCP tools, a refund and the cron. `npm run demo:check` runs the whole script as 14 checks.
+
+## How it works
+
+```mermaid
+sequenceDiagram
+    participant C as Client or agent
+    participant W as Worker (cashu-paywall)
+    participant D as D1
+    participant M as Mint
+    C->>W: request, no payment
+    W-->>C: 402, X-Cashu creqA (price, unit, mints)
+    C->>W: retry, X-Cashu cashuB token
+    W->>D: record the swap and reserve NUT-13 counters
+    W->>M: swap the token
+    W->>D: store proofs, credit a new key (one transaction)
+    W->>D: debit the price
+    W-->>C: 200, X-Ecash-Key, X-Ecash-Balance
+    C->>W: later calls with Authorization Bearer eck_ key
+    W->>D: debit (one UPDATE, no mint call)
+```
+
+1. An unpaid request gets a 402 with a NUT-18 payment request (`creqA`, or NUT-26 `creqB` by config) for the price, from the accepted mints.
+2. The client retries with a Cashu token. The token is checked without network first: mint on the allowlist, unit `sat`, not locked, within the caps.
+3. Before calling the mint, the Worker writes the operation to D1 with a `UNIQUE` claim on the token's inputs and a reserved range of NUT-13 counters.
+4. It swaps the token at the mint. The new proofs come from the wallet seed at those counters, so they can be rebuilt (NUT-09) after any crash.
+5. One D1 transaction stores the proofs (sealed with AES-GCM), credits the key and marks the operation done. The price is debited and the handler runs.
+6. Later calls send the key. Each is one conditional `UPDATE`. A cron settles anything left pending after 15 minutes, and a daily cron can melt surplus sats to your Lightning address.
+
+Details, with diagrams for every flow and the invariants: [docs/how-it-works.md](docs/how-it-works.md).
+
+## API at a glance
+
+### Workers HTTP
 
 ```ts
 import { createPaywall } from "cashu-paywall";
 
-const fortune = async () => Response.json({ fortune: "Don't trust, verify." });
+const paywall = createPaywall({
+  db: env.ECASH_DB,                     // D1 with migrations/0001_init.sql
+  keyPepper: env.ECASH_KEY_PEPPER,      // secrets
+  proofKey: env.ECASH_PROOF_KEY,
+  walletSeed: env.ECASH_WALLET_SEED,
+  mints: ["https://testnut.cashu.space"],
+  publicBaseUrl: "https://my-worker.example.workers.dev",
+});
 
-const paywallFor = (env: Env) =>
-  createPaywall({
-    db: env.ECASH_DB,
-    keyPepper: env.ECASH_KEY_PEPPER,     // secret, >= 32 chars
-    proofKey: env.ECASH_PROOF_KEY,       // secret, base64 of 32 bytes (AES-GCM for proofs at rest)
-    walletSeed: env.ECASH_WALLET_SEED,   // secret, 64-byte seed as hex. BACK IT UP.
-    mints: env.ECASH_MINTS.split(","),   // allowlist
-    publicBaseUrl: env.ECASH_PUBLIC_URL,
-    melt: { lightningAddress: env.ECASH_MELT_LN_ADDRESS }, // unset = melting off
-  });
-
-export default {
-  async fetch(request, env) {
-    const paywall = paywallFor(env);                 // cheap: no network
-    const routed = await paywall.handleRoutes(request); // /ecash/* (page, topup, balance, refund, keys, info)
-    if (routed) return routed;
-    if (new URL(request.url).pathname === "/fortune") {
-      return paywall.protect(fortune, { priceSats: 5 })(request);
-    }
-    return new Response("Not found", { status: 404 });
-  },
-  async scheduled(controller, env, ctx) {
-    ctx.waitUntil(paywallFor(env).scheduled(controller));
-  },
-} satisfies ExportedHandler<Env>;
+const routed = await paywall.handleRoutes(request); // /ecash page, topup, lightning, balance, refund, keys, info
+if (routed) return routed;
+return paywall.protect(handler, { priceSats: 5 })(request); // NUT-24 402 around any handler
 ```
 
-Crons: `"*/10 * * * *"` runs the recovery job, and `"0 3 * * *"` also runs the melt and the cleanup.
+Also: `paywall.debit(key, sats)`, `credit`, `balance`, `topupWithToken`, `startLightningTopup`, `refund`, `paymentRequest`, and `scheduled(controller)` for the crons (`*/10 * * * *` recovery, `0 3 * * *` melt and cleanup).
 
-```sh
-curl -si https://your.worker/fortune                       # 402, X-Cashu: creqA…
-curl -si -H "X-Cashu: cashuB…" https://your.worker/fortune  # 200, X-Ecash-Key: eck_…, X-Ecash-Balance
-curl -si -H "Authorization: Bearer eck_…" https://your.worker/fortune  # 200 while credit lasts
-```
-
-## Paid MCP tools
+### MCP
 
 ```ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEcashTools, withEcashCharge } from "cashu-paywall/mcp";
 
-function buildServer(paywall: Paywall, key: EcashKey) {
-  const server = new McpServer({ name: "my-server", version: "1.0.0" });
-  const getKey = () => key; // the caller's bearer key, checked before the server is built
-  server.registerTool("lookup", { description: "…", inputSchema: { q: z.string().describe("…") } },
-    withEcashCharge(paywall, { getKey, priceSats: 10, refundOn: (e) => e instanceof UpstreamDown },
-      async ({ q }) => ({ content: [{ type: "text", text: await lookup(q) }] })));
-  registerEcashTools(server, paywall, { getKey, priceSats: 10 }); // ecash_topup / _balance / _refund, all free
-  return server;
-}
+server.registerTool("lookup", { description: "…", inputSchema: { q: z.string() } },
+  withEcashCharge(paywall, { getKey, priceSats: 10 }, async ({ q }: { q: string }) => ({
+    content: [{ type: "text", text: await lookup(q) }],
+  })));
+registerEcashTools(server, paywall, { getKey, priceSats: 10 }); // ecash_topup, ecash_balance, ecash_refund: free
 ```
 
-A paid tool on an empty key returns `isError: true` with `code: "ECASH_INSUFFICIENT_BALANCE"`, a `payment_request` (NUT-18) and a `topup_url`, so an agent knows how to pay. `initialize`, `tools/list` and the `ecash_*` tools cost nothing. See [`examples/demo-worker`](examples/demo-worker) for a full stateless Streamable-HTTP MCP Worker, including `X-Cashu` on `/mcp`.
+A paid tool on an empty key returns `isError: true` with `code: "ECASH_INSUFFICIENT_BALANCE"`, a `payment_request` and a `topup_url`, so an agent knows how to pay.
 
-## Every way to pay
+Step-by-step setup, the MCP transport and every config option: [docs/integration.md](docs/integration.md).
 
-| How | Request | Result |
-|---|---|---|
-| NUT-24 | `X-Cashu: cashuB…` on a protected route | served; `X-Ecash-Key` (when a key was created), `X-Ecash-Balance`, `X-Ecash-Kid` |
-| Bearer key | `Authorization: Bearer eck_…` | debit, then served; `402` + `X-Cashu` when credit runs out |
-| MCP | `ecash_topup { token }` | credit on the caller's key |
-| Token top-up | `POST /ecash/topup` with `X-Cashu` or `{ "token": … }` | `{ kid, credited_sats, fee_sats, balance_sats, … }` |
-| Lightning | `POST /ecash/lightning { amount_sats }`, then poll `GET /ecash/lightning/:op_id` | invoice, then `CREDITED` |
-| Page | `GET /ecash` | HTML: Lightning invoice + QR, or paste a token |
+## Security in brief
 
-Credit = token amount − the mint's swap fee. A key is shown once and can't be recovered: refund before you lose it (`POST /ecash/refund`, or `ecash_refund`).
+- Only an HMAC of each key is stored. Proofs are sealed with AES-GCM. A D1 leak alone gives away neither keys nor spendable ecash.
+- Every mint call is recorded before it is made, outputs are deterministic (NUT-13), and a recovery job settles anything left pending with checkstate (NUT-07) and restore (NUT-09). Credit lands at most once.
+- A token's inputs are claimed with a `UNIQUE` constraint, so one token reaches the mint at most once from here.
+- Logs never contain tokens, keys, payment requests, invoices or secrets. A live test runs every money path and checks this.
+- Caps on each key and on the total held (custody cap). Melting is off until you set a Lightning address.
+- The pot is a claim on a third-party mint: if the mint fails, it is lost. Keep it small.
 
-All errors share one JSON body, `{ error, code, retryable, payment_request?, topup_url?, … }`, with these codes: `ECASH_TOKEN_INVALID`, `ECASH_MINT_NOT_ALLOWED`, `ECASH_UNIT_NOT_ALLOWED`, `ECASH_AMOUNT_TOO_LOW`, `ECASH_AMOUNT_TOO_HIGH`, `ECASH_BALANCE_CAP`, `ECASH_TOKEN_SPENT`, `ECASH_TOKEN_LOCKED`, `ECASH_MINT_MISMATCH` and `ECASH_NOTHING_TO_REFUND` (400); `ECASH_KEY_INVALID` (401); `ECASH_PAYMENT_REQUIRED` and `ECASH_INSUFFICIENT_BALANCE` (402); `ECASH_KEY_FROZEN` (403); `ECASH_RATE_LIMITED` (429); `ECASH_INTERNAL` (500); `ECASH_MINT_UNAVAILABLE`, `ECASH_PENDING` and `ECASH_POT_FULL` (503, with `Retry-After: 30`).
+Threat model, limits and what is not protected: [docs/security.md](docs/security.md). To report a problem: [SECURITY.md](SECURITY.md).
 
-## Config
+## Limitations and status
 
-| Option | Default | Meaning |
-|---|---|---|
-| `db` | required | D1 binding with the schema |
-| `keyPepper` | required | HMAC secret for `eck_` keys (use a separate pepper from your own API keys) |
-| `proofKey` | required | base64 32-byte AES-GCM key: proofs are sealed at rest |
-| `walletSeed` | required | 64-byte hex seed for NUT-13 outputs. **One seed per database.** Back it up offline |
-| `mints` | required | allowlist of mint URLs (normalised: lowercase host, no trailing `/`) |
-| `publicBaseUrl`, `basePath` | required, `/ecash` | where the top-up routes live |
-| `priceSats`, `suggestedTopupSats` | 1, 10 × price | price shown by helpers; amount in in-band payment requests |
-| `requestEncoding` | `"creqA"` | `"creqB"` for NUT-26 (`CREQB1…`). creqA reaches more wallets today |
-| `limits` | 1 / 50,000 / 50,000 / 200,000 / 8,192 / 64 | min top-up, max top-up, max balance per key, max total held (custody cap), max token chars, max proofs |
-| `rateLimiter` | none | a Cloudflare Rate Limiting binding (`{ limit({ key }) }`). **No limiter = no rate limiting.** Keys are namespaced per class (`topup`, `lightning`, `keys`, `badkey`, `call`) and are HMACs of the IP or key |
-| `melt` | off / 2,000 / 500 | `lightningAddress` (unset = no melting), `minSats`, `keepSats` |
-| `logger` | console JSON | every field goes through `redact()` first |
-| `fetch`, `now` | global | injectable for tests |
+- 0.1.0, unreleased, unaudited. Tested against testnut only (cdk-mintd 0.18.1). Not yet published to npm and not yet deployed anywhere.
+- Top-ups, refunds and melts need Workers Paid: a swap takes far more than the Free plan's 10 ms of CPU ([docs/performance.md](docs/performance.md)). Paid calls fit either plan.
+- `sat` only. One mint per key. Rate limiting needs a Cloudflare Rate Limiting binding.
+- The excess of an overpaid NUT-24 request stays as credit on a new key (`X-Ecash-Key`). NUT-24 doesn't define change, so plain NUT-24 clients ignore it ([docs/nut-24.md](docs/nut-24.md)).
 
-## Security notes
+## Docs
 
-- **Keys:** only `HMAC-SHA256(keyPepper, key)` is stored. A malformed key is rejected before any database read.
-- **Proofs at rest** are sealed with AES-GCM (`proofKey`), with each proof's `Y` as associated data. A D1 leak alone doesn't leak spendable ecash.
-- **Write before call:** every swap, mint, refund and melt is written to `ecash_ops` before the mint is called. Each one's NUT-13 counter range is reserved in D1. A token's input set is claimed with a `UNIQUE` constraint, so one token reaches the mint at most once from here.
-- **Recovery** (`*/10` cron) settles anything pending for more than 15 minutes. It uses checkstate (NUT-07) and restore (NUT-09). Credit is applied at most once, guarded by a claim id written in the same transaction.
-- **Counter safety:** if D1 is restored from a backup and the counters go backwards, the mint refuses the reused outputs (`10002`/`11008`). The library skips ahead and retries; nothing is lost. Never share a seed between two databases.
-- **Locked tokens** (NUT-10/11 P2PK or HTLC) are refused before any mint call. So are tokens from mints off the allowlist, units other than `sat`, and oversized tokens.
-- **Logs** never contain tokens, keys, payment requests, invoices, proofs or 64-hex secrets. A test (T-LOG-1) runs the whole flow and checks this. Errors from cashu-ts are logged as class, HTTP status and NUT code only.
-- **The page** is server-rendered with a strict CSP: one nonce'd inline script, no external resources, no cookies.
-- **Refund tokens are money.** An in-band refund passes the token through the client (and, for MCP, the model's context and logs). The tool output says so.
-
-## Custody and risks
-
-Between a top-up and the next melt, your Worker holds ecash: a claim on a third-party mint. If the mint fails, the pot is lost. Service credit keeps working (debits never touch the mint), but refunds and melts fail. Keep it small:
-
-- accept one well-known mint, and never a mint that calls itself test-only or warns it may rug;
-- keep the custody cap (`maxTotalHeldSats`) and the per-key cap low, and set a melt address so earnings leave daily;
-- back up `walletSeed` offline. Losing both the seed and the database loses the pot.
-
-Taking ecash for your own service is a merchant accepting a payment. Holding user float that you refund is the edge closest to custody rules (e.g. MiCA). That's why balances stay capped. This is not legal advice: get your own before raising the caps for real money.
-
-## Performance on Workers
-
-A paid call is one D1 write and well under a millisecond of CPU. A top-up, refund or melt runs secp256k1 math in cashu-ts. The day-1 spike measured about **80–160 ms of CPU** per swap on a small VM (an estimate; Cloudflare's CPUs are faster). That doesn't fit the Workers Free plan's 10 ms CPU limit, so run money-in/money-out on **Workers Paid**. The bundle is about 77 KB gzipped.
-
-## Develop
-
-```sh
-npm install
-npm run build          # dist/ (ESM + types)
-npm run typecheck
-npm test               # unit tests in the Workers vitest pool (miniflare D1), no network
-npm run test:testnut   # live tests against testnut.cashu.space (test sats)
-npm run demo:token -- 20   # print a fresh 20-sat testnut token
-```
-
-## Try the demo locally
-
-```sh
-npm install && npm run build
-cd examples/demo-worker
-npm run dev-vars       # fresh local secrets in .dev.vars (gitignored)
-npm run db:local       # apply the migration to a local D1
-npm run dev            # http://localhost:8787
-# in another shell, from the repo root:
-node scripts/demo-check.mjs http://localhost:8787   # runs the whole demo script, PASS/FAIL per step
-```
-
-A live demo URL will be added here once it is deployed.
+- [How it works](docs/how-it-works.md): tables, invariants, a sequence diagram for every flow
+- [Integration](docs/integration.md): a Worker and an MCP server step by step, the full config table
+- [Security model](docs/security.md)
+- [NUT-24 notes](docs/nut-24.md): status codes, headers, creqA vs creqB, interop, open spec questions
+- [Performance](docs/performance.md): CPU per swap and bundle size
+- [Demo Worker](examples/demo-worker)
+- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
