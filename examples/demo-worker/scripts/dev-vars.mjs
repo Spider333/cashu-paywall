@@ -12,4 +12,6 @@ const lines = [
   `ECASH_WALLET_SEED=${randomBytes(64).toString("hex")}`,
 ];
 writeFileSync(path, lines.join("\n") + "\n", { mode: 0o600 });
-console.log("Wrote .dev.vars (mode 600) with fresh local secrets. Back up the seed before this demo ever accepts a real mint.");
+console.log(
+  "Wrote .dev.vars (mode 600) with fresh local secrets. Back up the seed before this demo ever accepts a real mint.",
+);

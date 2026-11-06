@@ -56,7 +56,12 @@ describe("T-MCP-3 ecash_refund", () => {
     expect(await claim(r.body.token)).toBe(r.body.amount_sats - faucet.feeFor(r.body.token));
 
     let mintCalls = 0;
-    const counting = makePaywall(db(), { fetch: async (i, init) => { mintCalls++; return fetch(i, init); } });
+    const counting = makePaywall(db(), {
+      fetch: async (i, init) => {
+        mintCalls++;
+        return fetch(i, init);
+      },
+    });
     const second = await connect(counting, top.key!, 10);
     const r2 = await second.call("ecash_refund");
     expect(r2.isError).toBe(true);

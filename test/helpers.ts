@@ -3,7 +3,8 @@ import { hashKey } from "../src/core/keys";
 
 export const TESTNUT = "https://testnut.cashu.space";
 
-const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+const hex = (n: number) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 const b64 = (n: number) => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n))));
 
 /** Fresh random pepper, proof key and seed per test run: nothing sensitive is checked in. */
@@ -26,8 +27,14 @@ function seedFor(db: D1Database): string {
 
 export function makePaywall(db: D1Database, o: Overrides = {}) {
   return createPaywall({
-    db, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: seedFor(db),
-    mints: [TESTNUT], publicBaseUrl: "https://paywall.test", priceSats: 10, logger: quietLogger,
+    db,
+    keyPepper: TEST_CFG.keyPepper,
+    proofKey: TEST_CFG.proofKey,
+    walletSeed: seedFor(db),
+    mints: [TESTNUT],
+    publicBaseUrl: "https://paywall.test",
+    priceSats: 10,
+    logger: quietLogger,
     ...o,
   });
 }
@@ -40,8 +47,10 @@ export async function keyHash(key: EcashKey): Promise<string> {
 export async function fundedKey(db: D1Database, balance: number, o: Overrides = {}): Promise<EcashKey> {
   const pw = makePaywall(db, o);
   const { key } = await pw.createKey();
-  await db.prepare("UPDATE ecash_keys SET balance = ?, credited_total = ?, mint_url = ? WHERE key_hash = ?")
-    .bind(balance, balance, TESTNUT, await keyHash(key)).run();
+  await db
+    .prepare("UPDATE ecash_keys SET balance = ?, credited_total = ?, mint_url = ? WHERE key_hash = ?")
+    .bind(balance, balance, TESTNUT, await keyHash(key))
+    .run();
   return key;
 }
 
@@ -58,13 +67,23 @@ export function fakeLimiter(limit: number) {
 }
 
 export async function keyRow(db: D1Database, key: EcashKey) {
-  return db.prepare("SELECT * FROM ecash_keys WHERE key_hash = ?").bind(await keyHash(key)).first<{ balance: number; calls: number; mint_url: string | null }>();
+  return db
+    .prepare("SELECT * FROM ecash_keys WHERE key_hash = ?")
+    .bind(await keyHash(key))
+    .first<{ balance: number; calls: number; mint_url: string | null }>();
 }
 
 /** Opens sealed pot rows with the test proof key (tests only). */
 export async function openRows(rows: unknown[]) {
   const { openProofs } = await import("../src/core/store");
   const { buildCtx } = await import("../src/core/context");
-  const ctx = buildCtx({ db: {} as D1Database, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: "00".repeat(64), mints: [TESTNUT], publicBaseUrl: "https://x.test" });
+  const ctx = buildCtx({
+    db: {} as D1Database,
+    keyPepper: TEST_CFG.keyPepper,
+    proofKey: TEST_CFG.proofKey,
+    walletSeed: "00".repeat(64),
+    mints: [TESTNUT],
+    publicBaseUrl: "https://x.test",
+  });
   return openProofs(ctx, rows as never);
 }

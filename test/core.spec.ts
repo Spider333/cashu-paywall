@@ -33,11 +33,17 @@ describe("T-DEB-2 unknown / frozen key", () => {
   it("frozen key -> ECASH_KEY_FROZEN, balance untouched", async () => {
     const pw = makePaywall(db());
     const key = await fundedKey(db(), 50);
-    await db().prepare("UPDATE ecash_keys SET status = 'frozen' WHERE key_hash = ?").bind(await keyHash(key)).run();
+    await db()
+      .prepare("UPDATE ecash_keys SET status = 'frozen' WHERE key_hash = ?")
+      .bind(await keyHash(key))
+      .run();
     const r = await pw.debit(key, 10);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("ECASH_KEY_FROZEN");
-    const row = await db().prepare("SELECT balance FROM ecash_keys WHERE key_hash = ?").bind(await keyHash(key)).first<{ balance: number }>();
+    const row = await db()
+      .prepare("SELECT balance FROM ecash_keys WHERE key_hash = ?")
+      .bind(await keyHash(key))
+      .first<{ balance: number }>();
     expect(row!.balance).toBe(50);
   });
   it("insufficient balance carries a payment request", async () => {
@@ -75,7 +81,13 @@ describe("keys (PRD 6.4)", () => {
     let reads = 0;
     const real = db();
     const counting = new Proxy(real, {
-      get: (t, p) => (p === "prepare" ? (sql: string) => { reads++; return t.prepare(sql); } : Reflect.get(t, p)),
+      get: (t, p) =>
+        p === "prepare"
+          ? (sql: string) => {
+              reads++;
+              return t.prepare(sql);
+            }
+          : Reflect.get(t, p),
     });
     const pw = makePaywall(counting as D1Database);
     const r = await pw.debit("eck_bad" as `eck_${string}`, 1);
@@ -115,23 +127,42 @@ describe("11.5 data and migration", () => {
     expect(MIGRATIONS_SQL).toBe(env.MIGRATION_FILE_SQL);
   });
   it("migration applied: all tables exist", async () => {
-    const t = await db().prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ecash_%' ORDER BY name").all<{ name: string }>();
-    expect(t.results.map((r) => r.name)).toEqual(["ecash_counters", "ecash_keys", "ecash_mint_cache", "ecash_ops", "ecash_proofs"]);
+    const t = await db()
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ecash_%' ORDER BY name")
+      .all<{ name: string }>();
+    expect(t.results.map((r) => r.name)).toEqual([
+      "ecash_counters",
+      "ecash_keys",
+      "ecash_mint_cache",
+      "ecash_ops",
+      "ecash_proofs",
+    ]);
   });
   it("CHECK rejects a negative balance and a unit other than sat", async () => {
-    await expect(db().prepare("INSERT INTO ecash_keys (key_hash, kid, balance, created_at) VALUES ('neg1', 'neg1', -1, 0)").run()).rejects.toThrow(/CHECK/);
-    await expect(db().prepare("INSERT INTO ecash_keys (key_hash, kid, unit, created_at) VALUES ('usd1', 'usd1', 'usd', 0)").run()).rejects.toThrow(/CHECK/);
+    await expect(
+      db().prepare("INSERT INTO ecash_keys (key_hash, kid, balance, created_at) VALUES ('neg1', 'neg1', -1, 0)").run(),
+    ).rejects.toThrow(/CHECK/);
+    await expect(
+      db().prepare("INSERT INTO ecash_keys (key_hash, kid, unit, created_at) VALUES ('usd1', 'usd1', 'usd', 0)").run(),
+    ).rejects.toThrow(/CHECK/);
   });
   it("duplicate input_id rejected", async () => {
     const ins = (id: string) =>
-      db().prepare("INSERT INTO ecash_ops (op_id, kind, status, mint_url, input_id, amount, created_at, updated_at) VALUES (?, 'topup_token', 'pending', 'm', 'dup-input', 1, 0, 0)").bind(id);
+      db()
+        .prepare(
+          "INSERT INTO ecash_ops (op_id, kind, status, mint_url, input_id, amount, created_at, updated_at) VALUES (?, 'topup_token', 'pending', 'm', 'dup-input', 1, 0, 0)",
+        )
+        .bind(id);
     await ins("op-a").run();
     await expect(ins("op-b").run()).rejects.toThrow(/UNIQUE/);
   });
   it("sql/drop-all.sql drops every ecash_* table", async () => {
     // Its own database, so the other tests keep their tables.
     const d = env.DB_REF;
-    for (const s of env.ROLLBACK_SQL.split(";").map((x) => x.replace(/--.*$/gm, "").trim()).filter(Boolean)) await d.prepare(s).run();
+    for (const s of env.ROLLBACK_SQL.split(";")
+      .map((x) => x.replace(/--.*$/gm, "").trim())
+      .filter(Boolean))
+      await d.prepare(s).run();
     const t = await d.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ecash_%'").all();
     expect(t.results.length).toBe(0);
   });
@@ -146,7 +177,8 @@ describe("redact (PRD 6.10)", () => {
       "creqApWF0gaNhdGVub3N0cmFheKlucHJvZmlsZTFxeTI4d3VtbjhnaGo3dW45ZDNzaGp0",
       "CREQB1QYQQWER9D4HNZQ4XEMMNZAQE9XVZ6GDQAFUSE3XVDQ",
       "lnbc1u1p4w6phedqqpp543gzhltrv66usa7usgkg2294rq6hva3ymzdth235lfw5fxlmkk9q",
-      "a".repeat(64), "0123456789abcdef".repeat(8),
+      "a".repeat(64),
+      "0123456789abcdef".repeat(8),
     ];
     const out = redact(s.join(" | "));
     for (const x of s) expect(out).not.toContain(x);
@@ -158,9 +190,11 @@ describe("redact (PRD 6.10)", () => {
 describe("T-RL-1 rate limits", () => {
   it("11th top-up in a minute from one IP -> 429", async () => {
     const pw = makePaywall(db(), { rateLimiter: fakeLimiter(10) });
-    const req = () => new Request("https://paywall.test/ecash/topup", {
-      method: "POST", headers: { "CF-Connecting-IP": "203.0.113.7", "X-Cashu": "cashuBnotatoken" },
-    });
+    const req = () =>
+      new Request("https://paywall.test/ecash/topup", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "203.0.113.7", "X-Cashu": "cashuBnotatoken" },
+      });
     const codes: number[] = [];
     for (let i = 0; i < 11; i++) codes.push((await pw.handleRoutes(req()))!.status);
     expect(codes.slice(0, 10).every((c) => c === 400)).toBe(true); // garbage token, but each attempt counts

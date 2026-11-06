@@ -21,7 +21,13 @@ describe("T-402-1 / T-402-2 402 without payment", () => {
     expect(pr.transport ?? []).toEqual([]);
     expect(pr.nut10).toBeUndefined();
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body).toMatchObject({ code: "ECASH_PAYMENT_REQUIRED", price_sats: 5, unit: "sat", mints: ["https://testnut.cashu.space"], topup_url: "https://paywall.test/ecash" });
+    expect(body).toMatchObject({
+      code: "ECASH_PAYMENT_REQUIRED",
+      price_sats: 5,
+      unit: "sat",
+      mints: ["https://testnut.cashu.space"],
+      topup_url: "https://paywall.test/ecash",
+    });
     expect(body.payment_request).toBe(h);
   });
   it("creqB option -> header starts CREQB1 and cashu-ts decodes it", async () => {
@@ -41,7 +47,9 @@ describe("protect() with a bearer key (no mint)", () => {
   it("T-402-4: bearer with >= 5 -> 200 and balance - 5", async () => {
     const pw = makePaywall(db());
     const key = await fundedKey(db(), 12);
-    const res = await pw.protect(fortune, { priceSats: 5 })(new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }));
+    const res = await pw.protect(fortune, { priceSats: 5 })(
+      new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }),
+    );
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Ecash-Balance")).toBe("7");
     expect(res.headers.get("X-Ecash-Key")).toBeNull();
@@ -50,17 +58,26 @@ describe("protect() with a bearer key (no mint)", () => {
   it("N-5: too little credit -> 402 with X-Cashu, as with no payment", async () => {
     const pw = makePaywall(db());
     const key = await fundedKey(db(), 4);
-    const res = await pw.protect(fortune, { priceSats: 5 })(new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }));
+    const res = await pw.protect(fortune, { priceSats: 5 })(
+      new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }),
+    );
     expect(res.status).toBe(402);
     expect(res.headers.get("X-Cashu")).toMatch(/^creqA/);
   });
   it("malformed key -> 401; frozen key -> 403; N-7: key in the query string is ignored", async () => {
     const pw = makePaywall(db());
     const h = pw.protect(fortune, { priceSats: 5 });
-    expect((await h(new Request("https://paywall.test/fortune", { headers: { Authorization: "Bearer nope" } }))).status).toBe(401);
+    expect(
+      (await h(new Request("https://paywall.test/fortune", { headers: { Authorization: "Bearer nope" } }))).status,
+    ).toBe(401);
     const key = await fundedKey(db(), 50);
-    await db().prepare("UPDATE ecash_keys SET status = 'frozen' WHERE key_hash = ?").bind(await keyHash(key)).run();
-    const frozen = await h(new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }));
+    await db()
+      .prepare("UPDATE ecash_keys SET status = 'frozen' WHERE key_hash = ?")
+      .bind(await keyHash(key))
+      .run();
+    const frozen = await h(
+      new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }),
+    );
     expect(frozen.status).toBe(403);
     const q = await h(new Request(`https://paywall.test/fortune?key=${key}&authorization=Bearer%20${key}`));
     expect(q.status).toBe(402);
@@ -68,8 +85,12 @@ describe("protect() with a bearer key (no mint)", () => {
   it("a handler that throws gives the debit back and answers 500", async () => {
     const pw = makePaywall(db());
     const key = await fundedKey(db(), 10);
-    const res = await pw.protect(async () => { throw new Error("upstream down"); }, { priceSats: 5 })(
-      new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }));
+    const res = await pw.protect(
+      async () => {
+        throw new Error("upstream down");
+      },
+      { priceSats: 5 },
+    )(new Request("https://paywall.test/fortune", { headers: { Authorization: `Bearer ${key}` } }));
     expect(res.status).toBe(500);
     expect((await pw.balance(key)).balanceSats).toBe(10);
   });
@@ -88,20 +109,34 @@ describe("T-LN-3 top-up page and routes", () => {
     const html = await res.text();
     expect(html).toContain("<svg");
     expect(html).not.toMatch(/<script[^>]+src=/i);
-    expect(html).not.toMatch(/https?:\/\/(?!testnut\.cashu\.space|paywall\.test|www\.w3\.org\/2000\/svg)[a-z0-9.-]+\//i);
+    expect(html).not.toMatch(
+      /https?:\/\/(?!testnut\.cashu\.space|paywall\.test|www\.w3\.org\/2000\/svg)[a-z0-9.-]+\//i,
+    );
     const nonce = /nonce-([A-Za-z0-9_-]+)/.exec(csp)![1];
     expect(html).toContain(`<script nonce="${nonce}">`);
     expect(res.headers.get("Set-Cookie")).toBeNull();
   });
   it("GET /ecash/info, POST /ecash/keys, GET /ecash/balance, unknown sub-route, other paths -> null", async () => {
     const pw = makePaywall(db());
-    const info = (await (await pw.handleRoutes(new Request("https://paywall.test/ecash/info")))!.json()) as Record<string, any>;
-    expect(info).toMatchObject({ unit: "sat", mints: ["https://testnut.cashu.space"], price_sats: 10, nuts: [4, 5, 7, 9, 13, 18, 24] });
+    const info = (await (await pw.handleRoutes(new Request("https://paywall.test/ecash/info")))!.json()) as Record<
+      string,
+      any
+    >;
+    expect(info).toMatchObject({
+      unit: "sat",
+      mints: ["https://testnut.cashu.space"],
+      price_sats: 10,
+      nuts: [4, 5, 7, 9, 13, 18, 24],
+    });
     expect(info.payment_request).toMatch(/^creqA/);
-    const k = (await (await pw.handleRoutes(new Request("https://paywall.test/ecash/keys", { method: "POST" })))!.json()) as Record<string, any>;
+    const k = (await (await pw.handleRoutes(
+      new Request("https://paywall.test/ecash/keys", { method: "POST" }),
+    ))!.json()) as Record<string, any>;
     expect(k.key).toMatch(/^eck_/);
     expect(k.balance_sats).toBe(0);
-    const b = (await pw.handleRoutes(new Request("https://paywall.test/ecash/balance", { headers: { Authorization: `Bearer ${k.key}` } })))!;
+    const b = (await pw.handleRoutes(
+      new Request("https://paywall.test/ecash/balance", { headers: { Authorization: `Bearer ${k.key}` } }),
+    ))!;
     expect(b.status).toBe(200);
     expect(((await b.json()) as Record<string, any>).balance_sats).toBe(0);
     const nob = (await pw.handleRoutes(new Request("https://paywall.test/ecash/balance")))!;
@@ -115,7 +150,14 @@ describe("T-LN-3 top-up page and routes", () => {
     const pw = makePaywall(db(), { rateLimiter: fakeLimiter(5) });
     const codes = [];
     for (let i = 0; i < 6; i++) {
-      codes.push((await pw.handleRoutes(new Request("https://paywall.test/ecash/keys", { method: "POST", headers: { "CF-Connecting-IP": "198.51.100.9" } })))!.status);
+      codes.push(
+        (await pw.handleRoutes(
+          new Request("https://paywall.test/ecash/keys", {
+            method: "POST",
+            headers: { "CF-Connecting-IP": "198.51.100.9" },
+          }),
+        ))!.status,
+      );
     }
     expect(codes).toEqual([200, 200, 200, 200, 200, 429]);
   });

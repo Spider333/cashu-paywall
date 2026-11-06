@@ -7,8 +7,21 @@ import { PaywallError } from "./errors.js";
 import { hashKey, isEcashKey, newKey, type EcashKey } from "./keys.js";
 import { errorFields } from "./redact.js";
 import {
-  COUNTER_BLOCK, D1CounterSource, bindKeyToMint, creditBatch, failOp, getKeyRow, getOpByInput, insertKeyStmt, insertOpStmt,
-  newOpId, proofY, sats, sumSats, totalHeld, type KeyRow,
+  COUNTER_BLOCK,
+  D1CounterSource,
+  bindKeyToMint,
+  creditBatch,
+  failOp,
+  getKeyRow,
+  getOpByInput,
+  insertKeyStmt,
+  insertOpStmt,
+  newOpId,
+  proofY,
+  sats,
+  sumSats,
+  totalHeld,
+  type KeyRow,
 } from "./store.js";
 import { NUT_ALREADY_SPENT, getWallet, isCounterReuse, skipCounterAhead } from "./wallet.js";
 
@@ -45,7 +58,10 @@ function isLockedSecret(secret: string): boolean {
 }
 
 export async function topupWithToken(
-  ctx: Ctx, token: string, key?: EcashKey, opts: { minCreditSats?: number; retries?: number } = {},
+  ctx: Ctx,
+  token: string,
+  key?: EcashKey,
+  opts: { minCreditSats?: number; retries?: number } = {},
 ): Promise<TopupResult> {
   // 1. Size and shape (no network).
   if (typeof token !== "string") throw new PaywallError("ECASH_TOKEN_INVALID");
@@ -68,9 +84,12 @@ export async function topupWithToken(
   // 2. Policy checks before any mint call.
   if (!ctx.mints.includes(mintUrl)) throw new PaywallError("ECASH_MINT_NOT_ALLOWED", { details: { mints: ctx.mints } });
   if ((meta.unit ?? "sat") !== "sat") throw new PaywallError("ECASH_UNIT_NOT_ALLOWED");
-  if (secrets.length > ctx.limits.maxProofsPerToken) throw new PaywallError("ECASH_TOKEN_INVALID", { message: "The token has too many proofs." });
-  if (amount < ctx.limits.minTopupSats) throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { details: { min_topup_sats: ctx.limits.minTopupSats } });
-  if (amount > ctx.limits.maxTopupSats) throw new PaywallError("ECASH_AMOUNT_TOO_HIGH", { details: { max_topup_sats: ctx.limits.maxTopupSats } });
+  if (secrets.length > ctx.limits.maxProofsPerToken)
+    throw new PaywallError("ECASH_TOKEN_INVALID", { message: "The token has too many proofs." });
+  if (amount < ctx.limits.minTopupSats)
+    throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { details: { min_topup_sats: ctx.limits.minTopupSats } });
+  if (amount > ctx.limits.maxTopupSats)
+    throw new PaywallError("ECASH_AMOUNT_TOO_HIGH", { details: { max_topup_sats: ctx.limits.maxTopupSats } });
   if (secrets.some(isLockedSecret)) throw new PaywallError("ECASH_TOKEN_LOCKED");
 
   // 3. Key: validate and bind an existing one, or prepare a new one (inserted with the op in step 4).
@@ -83,11 +102,13 @@ export async function topupWithToken(
     kid = k.kid;
     keyHash = k.row.key_hash;
     balanceBefore = k.row.balance;
-    if (balanceBefore + amount > ctx.limits.maxBalanceSats) throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
+    if (balanceBefore + amount > ctx.limits.maxBalanceSats)
+      throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
     const bound = k.row.mint_url ?? (await bindKeyToMint(ctx, keyHash, mintUrl))?.mint_url;
     if (bound !== mintUrl) throw new PaywallError("ECASH_MINT_MISMATCH", { details: { key_mint: bound } });
   } else {
-    if (amount > ctx.limits.maxBalanceSats) throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
+    if (amount > ctx.limits.maxBalanceSats)
+      throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
     created = newKey();
     ({ keyHash, kid } = await hashKey(ctx.cfg.keyPepper, created));
   }
@@ -109,13 +130,17 @@ export async function topupWithToken(
       await wallet.loadMint(true);
       priced = decodeAndFee();
     } catch {
-      throw new PaywallError("ECASH_TOKEN_INVALID", { message: "The token could not be read with its mint's keysets." });
+      throw new PaywallError("ECASH_TOKEN_INVALID", {
+        message: "The token could not be read with its mint's keysets.",
+      });
     }
   }
   const { decoded, fee } = priced;
   const minCredit = Math.max(1, opts.minCreditSats ?? 1);
   if (amount - fee < minCredit) {
-    throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { details: { amount_sats: amount, fee_sats: fee, min_credit_sats: minCredit } });
+    throw new PaywallError("ECASH_AMOUNT_TOO_LOW", {
+      details: { amount_sats: amount, fee_sats: fee, min_credit_sats: minCredit },
+    });
   }
 
   // 4. Claim the token locally: input_id is UNIQUE, so one token reaches the mint at most once from here.
@@ -125,8 +150,16 @@ export async function topupWithToken(
   const range = await new D1CounterSource(ctx.db).reserve(keysetId, COUNTER_BLOCK);
   const opId = newOpId();
   const opStmt = insertOpStmt(ctx, {
-    op_id: opId, kind: "topup_token", key_hash: keyHash, mint_url: mintUrl, input_id: inputId, amount,
-    keyset_id: keysetId, counter_start: range.start, counter_count: range.count, detail: { ys },
+    op_id: opId,
+    kind: "topup_token",
+    key_hash: keyHash,
+    mint_url: mintUrl,
+    input_id: inputId,
+    amount,
+    keyset_id: keysetId,
+    counter_start: range.start,
+    counter_count: range.count,
+    detail: { ys },
   });
   try {
     if (created) await ctx.db.batch([insertKeyStmt(ctx, keyHash, kid, mintUrl), opStmt]);
@@ -173,10 +206,22 @@ export async function topupWithToken(
     throw pendingError(created, kid);
   }
   const after = await getKeyRow(ctx, keyHash);
-  ctx.log.info("ecash_topup", { kid, op_id: opId, mint_host: hostOf(mintUrl), amount, fee: realFee, balance_after: after?.balance });
+  ctx.log.info("ecash_topup", {
+    kid,
+    op_id: opId,
+    mint_host: hostOf(mintUrl),
+    amount,
+    fee: realFee,
+    balance_after: after?.balance,
+  });
   return {
     ...(created ? { key: created } : {}),
-    kid, creditedSats: credited, feeSats: realFee, balanceSats: after?.balance ?? balanceBefore + credited, mint: mintUrl, opId,
+    kid,
+    creditedSats: credited,
+    feeSats: realFee,
+    balanceSats: after?.balance ?? balanceBefore + credited,
+    mint: mintUrl,
+    opId,
   };
 }
 
@@ -187,6 +232,10 @@ export async function topupWithToken(
 function pendingError(created: EcashKey | undefined, kid: string): PaywallError {
   if (!created) return new PaywallError("ECASH_PENDING");
   return new PaywallError("ECASH_PENDING", {
-    details: { key: created, kid, warning: "Save this key now; it is shown once. Your credit lands on it within 15 minutes." },
+    details: {
+      key: created,
+      kid,
+      warning: "Save this key now; it is shown once. Your credit lands on it within 15 minutes.",
+    },
   });
 }

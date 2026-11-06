@@ -70,7 +70,11 @@ export class Sealer {
 
   async seal(plaintext: string, aad: string): Promise<string> {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(aad) }, await this.key, enc.encode(plaintext));
+    const ct = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: enc.encode(aad) },
+      await this.key,
+      enc.encode(plaintext),
+    );
     const out = new Uint8Array(12 + ct.byteLength);
     out.set(iv, 0);
     out.set(new Uint8Array(ct), 12);
@@ -80,7 +84,10 @@ export class Sealer {
   async open(sealed: string, aad: string): Promise<string> {
     const bytes = base64urlDecode(sealed);
     const pt = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: bytes.slice(0, 12), additionalData: enc.encode(aad) }, await this.key, bytes.slice(12));
+      { name: "AES-GCM", iv: bytes.slice(0, 12), additionalData: enc.encode(aad) },
+      await this.key,
+      bytes.slice(12),
+    );
     return dec.decode(pt);
   }
 }

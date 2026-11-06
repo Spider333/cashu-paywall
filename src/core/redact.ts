@@ -39,13 +39,14 @@ export function safeLogger(inner?: PaywallLogger): PaywallLogger {
     warn: (event, fields) => console.warn(JSON.stringify({ level: "warn", event, ...fields })),
     error: (event, fields) => console.error(JSON.stringify({ level: "error", event, ...fields })),
   };
-  const wrap = (fn: (e: string, f: Record<string, unknown>) => void) => (event: string, fields: Record<string, unknown>) => {
-    try {
-      fn(redact(event), redactDeep(fields) as Record<string, unknown>);
-    } catch {
-      // logging must never break a payment
-    }
-  };
+  const wrap =
+    (fn: (e: string, f: Record<string, unknown>) => void) => (event: string, fields: Record<string, unknown>) => {
+      try {
+        fn(redact(event), redactDeep(fields) as Record<string, unknown>);
+      } catch {
+        // logging must never break a payment
+      }
+    };
   return { info: wrap(base.info.bind(base)), warn: wrap(base.warn.bind(base)), error: wrap(base.error.bind(base)) };
 }
 

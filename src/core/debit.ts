@@ -6,9 +6,7 @@ import { rateLimit } from "./ratelimit.js";
 import { atomicDebit, getKeyRow } from "./store.js";
 
 /** Result of `Paywall.debit`. A failed debit returns the error instead of throwing, so a hot path needs no try/catch. */
-export type DebitResult =
-  | { ok: true; balanceSats: number; kid: string }
-  | { ok: false; error: PaywallError };
+export type DebitResult = { ok: true; balanceSats: number; kid: string } | { ok: false; error: PaywallError };
 
 function positiveInt(n: number, what: string): void {
   if (!Number.isSafeInteger(n) || n <= 0) throw new Error(`cashu-paywall: ${what} must be a positive integer`);
@@ -25,7 +23,10 @@ export async function debit(ctx: Ctx, key: EcashKey, amountSats: number): Promis
     const balance = r.balance ?? (await getKeyRow(ctx, keyHash))?.balance ?? 0;
     return { ok: true, balanceSats: balance, kid };
   }
-  const row = await ctx.db.prepare("SELECT status, balance FROM ecash_keys WHERE key_hash = ?").bind(keyHash).first<{ status: string; balance: number }>();
+  const row = await ctx.db
+    .prepare("SELECT status, balance FROM ecash_keys WHERE key_hash = ?")
+    .bind(keyHash)
+    .first<{ status: string; balance: number }>();
   if (!row) return { ok: false, error: new PaywallError("ECASH_KEY_INVALID") };
   if (row.status === "frozen") return { ok: false, error: new PaywallError("ECASH_KEY_FROZEN") };
   return {

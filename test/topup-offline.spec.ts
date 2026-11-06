@@ -7,11 +7,16 @@ import { TESTNUT, fundedKey, makePaywall } from "./helpers";
 
 const db = () => env.DB;
 const KEYSET = "017bc604aaa08e9b58804bdd552286f15d75ebdaa3d1bccc2a52fc7406b4040fda"; // testnut sat keyset (shape only)
-const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+const hex = (n: number) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 
 /** A well-formed token with made-up proofs: decodable, never valid at a mint. */
 function fakeToken(amount: number, mint = TESTNUT, unit = "sat", secret?: string): string {
-  return getEncodedToken({ mint, unit, proofs: [{ id: KEYSET, amount: Amount.from(amount), secret: secret ?? hex(32), C: "02" + hex(32) }] });
+  return getEncodedToken({
+    mint,
+    unit,
+    proofs: [{ id: KEYSET, amount: Amount.from(amount), secret: secret ?? hex(32), C: "02" + hex(32) }],
+  });
 }
 
 function noMint() {
@@ -97,7 +102,9 @@ describe("T-TOP-8 garbage", () => {
     const m = noMint();
     const pw = makePaywall(db(), { fetch: m.fetch });
     const h = pw.protect(async () => new Response("served"), { priceSats: 5 });
-    const res = await h(new Request("https://paywall.test/x", { headers: { "X-Cashu": "cashuB" + "x".repeat(20_000) } }));
+    const res = await h(
+      new Request("https://paywall.test/x", { headers: { "X-Cashu": "cashuB" + "x".repeat(20_000) } }),
+    );
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBe("ECASH_TOKEN_INVALID");
     expect(m.calls).toEqual([]);
@@ -106,7 +113,8 @@ describe("T-TOP-8 garbage", () => {
     const m = noMint();
     const pw = makePaywall(db(), { fetch: m.fetch, limits: { maxProofsPerToken: 2 } });
     const t = getEncodedToken({
-      mint: TESTNUT, unit: "sat",
+      mint: TESTNUT,
+      unit: "sat",
       proofs: [1, 2, 4].map((a) => ({ id: KEYSET, amount: Amount.from(a), secret: hex(32), C: "02" + hex(32) })),
     });
     expect(await code(pw.topupWithToken(t))).toBe("ECASH_TOKEN_INVALID");

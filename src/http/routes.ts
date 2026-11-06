@@ -56,11 +56,18 @@ export async function handleRoutes(ctx: Ctx, request: Request): Promise<Response
 
     if (sub === "/info" && m === "GET") {
       return json({
-        unit: "sat", mints: ctx.mints, price_sats: ctx.priceSats, limits: {
-          min_topup_sats: ctx.limits.minTopupSats, max_topup_sats: ctx.limits.maxTopupSats, max_balance_sats: ctx.limits.maxBalanceSats,
-          max_token_chars: ctx.limits.maxTokenChars, max_proofs_per_token: ctx.limits.maxProofsPerToken,
+        unit: "sat",
+        mints: ctx.mints,
+        price_sats: ctx.priceSats,
+        limits: {
+          min_topup_sats: ctx.limits.minTopupSats,
+          max_topup_sats: ctx.limits.maxTopupSats,
+          max_balance_sats: ctx.limits.maxBalanceSats,
+          max_token_chars: ctx.limits.maxTokenChars,
+          max_proofs_per_token: ctx.limits.maxProofsPerToken,
         },
-        nuts: [4, 5, 7, 9, 13, 18, 24], payment_request: paymentRequest(ctx, ctx.suggestedTopupSats),
+        nuts: [4, 5, 7, 9, 13, 18, 24],
+        payment_request: paymentRequest(ctx, ctx.suggestedTopupSats),
       });
     }
 
@@ -71,26 +78,43 @@ export async function handleRoutes(ctx: Ctx, request: Request): Promise<Response
       if (token.length > ctx.limits.maxTokenChars) throw new PaywallError("ECASH_TOKEN_INVALID");
       if (!(await rateLimit(ctx, "topup", ip))) throw new PaywallError("ECASH_RATE_LIMITED");
       const r = await topupWithToken(ctx, token, key);
-      return json(topupJson(ctx, r), 200, r.key ? { "X-Ecash-Key": r.key, "X-Ecash-Balance": String(r.balanceSats), "X-Ecash-Kid": r.kid } : { "X-Ecash-Balance": String(r.balanceSats), "X-Ecash-Kid": r.kid });
+      return json(
+        topupJson(ctx, r),
+        200,
+        r.key
+          ? { "X-Ecash-Key": r.key, "X-Ecash-Balance": String(r.balanceSats), "X-Ecash-Kid": r.kid }
+          : { "X-Ecash-Balance": String(r.balanceSats), "X-Ecash-Kid": r.kid },
+      );
     }
 
     if (sub === "/lightning" && m === "POST") {
       const key = await optionalKey(ctx, request);
       const body = await readJson(request);
       const amount = Number(body.amount_sats);
-      if (!Number.isSafeInteger(amount)) throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { message: "amount_sats must be a whole number of sats." });
+      if (!Number.isSafeInteger(amount))
+        throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { message: "amount_sats must be a whole number of sats." });
       if (!(await rateLimit(ctx, "lightning", ip))) throw new PaywallError("ECASH_RATE_LIMITED");
       const r = await startLightningTopup(ctx, amount, key);
       return json({
-        op_id: r.opId, ...(r.key ? { key: r.key, warning: "Save this key now; it is shown once and activates when the invoice is paid." } : {}),
-        kid: r.kid, invoice: r.invoice, amount_sats: r.amountSats, expires_at: r.expiresAt, status_url: r.statusUrl, qr_svg: qrSvg(r.invoice.toUpperCase()),
+        op_id: r.opId,
+        ...(r.key
+          ? { key: r.key, warning: "Save this key now; it is shown once and activates when the invoice is paid." }
+          : {}),
+        kid: r.kid,
+        invoice: r.invoice,
+        amount_sats: r.amountSats,
+        expires_at: r.expiresAt,
+        status_url: r.statusUrl,
+        qr_svg: qrSvg(r.invoice.toUpperCase()),
       });
     }
 
     const st = /^\/lightning\/([0-9a-f-]{36})$/.exec(sub);
     if (st && m === "GET") {
       const s = await checkLightningTopup(ctx, st[1]!);
-      return json(s.state === "CREDITED" ? { state: s.state, kid: s.kid, balance_sats: s.balanceSats } : { state: s.state });
+      return json(
+        s.state === "CREDITED" ? { state: s.state, kid: s.kid, balance_sats: s.balanceSats } : { state: s.state },
+      );
     }
 
     if (sub === "/balance" && m === "GET") {

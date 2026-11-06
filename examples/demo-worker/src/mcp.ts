@@ -24,16 +24,27 @@ export function buildServer(paywall: Paywall, key: EcashKey, priceSats: number):
         `Returns one Cashu protocol spec (a "NUT") as a short fact: its number, title and a link to the spec. ` +
         `Costs ${priceSats} sats of ecash credit per call; a NUT number not in the list is refunded.`,
       inputSchema: {
-        nut: z.number().int().min(0).max(99).optional()
-          .describe("The NUT number to look up, from 0 to 99 (for example 24 for HTTP 402). Leave it out for a random one."),
+        nut: z
+          .number()
+          .int()
+          .min(0)
+          .max(99)
+          .optional()
+          .describe(
+            "The NUT number to look up, from 0 to 99 (for example 24 for HTTP 402). Leave it out for a random one.",
+          ),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    withEcashCharge(paywall, { getKey, priceSats, refundOn: (e) => e instanceof NoSuchNut }, async (args: { nut?: number }) => {
-      const fact = findFact(args.nut ?? null);
-      if (!fact) throw new NoSuchNut(args.nut ?? -1);
-      return json(fact);
-    }),
+    withEcashCharge(
+      paywall,
+      { getKey, priceSats, refundOn: (e) => e instanceof NoSuchNut },
+      async (args: { nut?: number }) => {
+        const fact = findFact(args.nut ?? null);
+        if (!fact) throw new NoSuchNut(args.nut ?? -1);
+        return json(fact);
+      },
+    ),
   );
 
   server.registerTool(
@@ -48,7 +59,8 @@ export function buildServer(paywall: Paywall, key: EcashKey, priceSats: number):
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     withEcashCharge(paywall, { getKey, priceSats }, async (args: { text: string }) =>
-      json({ text: args.text, length: args.text.length, served_at: new Date().toISOString() })),
+      json({ text: args.text, length: args.text.length, served_at: new Date().toISOString() }),
+    ),
   );
 
   registerEcashTools(server, paywall, { getKey, priceSats });

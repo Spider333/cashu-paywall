@@ -13,8 +13,8 @@
       "database_name": "cashu-paywall-demo",
       // Placeholder until `wrangler d1 create cashu-paywall-demo` (held for David's yes). Local dev ignores it.
       "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "../../migrations"
-    }
+      "migrations_dir": "../../migrations",
+    },
   ],
   // Daily melt + cleanup at 03:00 UTC; recovery every 10 minutes.
   "triggers": { "crons": ["0 3 * * *", "*/10 * * * *"] },
@@ -25,9 +25,9 @@
     "ECASH_PUBLIC_URL": "http://localhost:8787",
     "ECASH_MELT_MIN_SATS": "2000",
     "ECASH_MAX_BALANCE_SATS": "5000",
-    "ECASH_MAX_TOTAL_HELD_SATS": "20000"
+    "ECASH_MAX_TOTAL_HELD_SATS": "20000",
     // ECASH_MELT_LN_ADDRESS is NOT set on purpose: melting stays off until the operator names an address.
-  }
+  },
   // Secrets (never in this file): ECASH_KEY_PEPPER, ECASH_PROOF_KEY, ECASH_WALLET_SEED.
   // Local: `npm run dev-vars` writes fresh ones to .dev.vars (gitignored).
 }

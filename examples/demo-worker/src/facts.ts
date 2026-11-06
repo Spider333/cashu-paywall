@@ -1,5 +1,9 @@
 // One line per Cashu NUT, titles copied from the cashubtc/nuts README on 5 Nov 2026. No invented text.
-export interface NutFact { nut: number; title: string; url: string }
+export interface NutFact {
+  nut: number;
+  title: string;
+  url: string;
+}
 
 const TITLES: Array<[number, string]> = [
   [0, "Cryptography and Models"],
@@ -36,7 +40,9 @@ const TITLES: Array<[number, string]> = [
 ];
 
 export const FACTS: NutFact[] = TITLES.map(([nut, title]) => ({
-  nut, title, url: `https://github.com/cashubtc/nuts/blob/main/${String(nut).padStart(2, "0")}.md`,
+  nut,
+  title,
+  url: `https://github.com/cashubtc/nuts/blob/main/${String(nut).padStart(2, "0")}.md`,
 }));
 
 /** No value -> a random fact. A number 0..99 not in the list -> null. Anything else -> null. */

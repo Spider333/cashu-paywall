@@ -16,7 +16,8 @@ beforeAll(async () => {
   if (!t) for (const m of env.TEST_MIGRATIONS) for (const q of m.queries) await db().prepare(q).run();
 });
 beforeEach(async () => {
-  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_mint_cache"]) await db().prepare(`DELETE FROM ${t}`).run();
+  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_mint_cache"])
+    await db().prepare(`DELETE FROM ${t}`).run();
 });
 
 describe("review #1: inputs the wallet didn't use come back to the pot", () => {
@@ -31,7 +32,9 @@ describe("review #1: inputs the wallet didn't use come back to the pot", () => {
     const pot = await potMatchesMint(db(), openRows);
     // Everything we hold is still unspent at the mint, and nothing vanished: pot = 24 - sent - fee paid at the mint.
     expect(pot).toBe(24 - ref.amountSats - ref.feeSats);
-    const held = await db().prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'").first<{ s: number }>();
+    const held = await db()
+      .prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'")
+      .first<{ s: number }>();
     expect(held!.s).toBe(pot);
     expect(await claim(ref.token)).toBeGreaterThan(0);
   });
@@ -42,7 +45,13 @@ describe("review #2: overlapping recovery runs give a refund back once", () => {
     const pw = makePaywall(db());
     const top = await pw.topupWithToken(await faucet.token(89)); // 88
     expect((await pw.debit(top.key!, 10)).ok).toBe(true);
-    const crash = makePaywall(db(), { testHooks: { afterSwap: () => { throw new Error("simulated crash"); } } });
+    const crash = makePaywall(db(), {
+      testHooks: {
+        afterSwap: () => {
+          throw new Error("simulated crash");
+        },
+      },
+    });
     await expect(crash.refund(top.key!)).rejects.toThrow(/simulated crash/);
     const later = makePaywall(db(), { now: LATER });
     const [a, b] = await Promise.all([
@@ -69,7 +78,9 @@ describe("review #3: a key created by a PENDING top-up is handed back", () => {
     await makePaywall(db()).topupWithToken(await faucet.token(5));
     const pw = makePaywall(db(), { fetch: flaky });
     const t = await faucet.token(30);
-    const res = await pw.protect(async () => new Response("ok"), { priceSats: 5 })(new Request("https://paywall.test/x", { headers: { "X-Cashu": t } }));
+    const res = await pw.protect(async () => new Response("ok"), { priceSats: 5 })(
+      new Request("https://paywall.test/x", { headers: { "X-Cashu": t } }),
+    );
     expect(res.status).toBe(503);
     const body = (await res.json()) as Record<string, string>;
     expect(body.code).toBe("ECASH_PENDING");

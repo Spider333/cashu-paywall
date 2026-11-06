@@ -10,7 +10,9 @@ export async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
     try {
       return await fn();
     } catch (e) {
-      const transient = /timed out|NetworkError|fetch failed|Mint request failed/i.test(String((e as Error)?.message ?? e)) || (e as Error)?.name === "NetworkError";
+      const transient =
+        /timed out|NetworkError|fetch failed|Mint request failed/i.test(String((e as Error)?.message ?? e)) ||
+        (e as Error)?.name === "NetworkError";
       if (!transient || i >= tries) throw e;
       await new Promise((r) => setTimeout(r, 1000 * i));
     }
@@ -67,8 +69,14 @@ export class Faucet {
   token(amount: number, opts: { p2pkPubkey?: string } = {}): Promise<string> {
     return this.run(async () => {
       await this.ensure(amount);
-      const { send, keep } = await retry(() => this.wallet.send(amount, this.proofs, { includeFees: false },
-        opts.p2pkPubkey ? { send: { type: "p2pk", options: { pubkey: opts.p2pkPubkey } } } : undefined));
+      const { send, keep } = await retry(() =>
+        this.wallet.send(
+          amount,
+          this.proofs,
+          { includeFees: false },
+          opts.p2pkPubkey ? { send: { type: "p2pk", options: { pubkey: opts.p2pkPubkey } } } : undefined,
+        ),
+      );
       this.proofs = keep;
       return getEncodedToken({ mint: TESTNUT, proofs: send, unit: this.unit });
     });

@@ -83,12 +83,19 @@ export function insertKeyStmt(ctx: Ctx, keyHash: string, kid: string, mintUrl: s
 
 /** Binds an unbound key to a mint (before any swap, so two first top-ups can't race), then re-reads it. */
 export async function bindKeyToMint(ctx: Ctx, keyHash: string, mintUrl: string): Promise<KeyRow | null> {
-  await ctx.db.prepare("UPDATE ecash_keys SET mint_url = ?1 WHERE key_hash = ?2 AND mint_url IS NULL").bind(mintUrl, keyHash).run();
+  await ctx.db
+    .prepare("UPDATE ecash_keys SET mint_url = ?1 WHERE key_hash = ?2 AND mint_url IS NULL")
+    .bind(mintUrl, keyHash)
+    .run();
   return getKeyRow(ctx, keyHash);
 }
 
 /** The atomic debit. `meta.changes === 1` is the success signal, so the logic holds even if RETURNING returns no row. */
-export async function atomicDebit(ctx: Ctx, keyHash: string, amount: number): Promise<{ ok: boolean; balance: number | null }> {
+export async function atomicDebit(
+  ctx: Ctx,
+  keyHash: string,
+  amount: number,
+): Promise<{ ok: boolean; balance: number | null }> {
   const r = await ctx.db
     .prepare(
       `UPDATE ecash_keys
@@ -105,7 +112,9 @@ export async function atomicDebit(ctx: Ctx, keyHash: string, amount: number): Pr
 // ---- pot ------------------------------------------------------------------------------------------
 
 export async function totalHeld(ctx: Ctx): Promise<number> {
-  const r = await ctx.db.prepare("SELECT COALESCE(SUM(amount), 0) AS s FROM ecash_proofs WHERE state != 'spent'").first<{ s: number }>();
+  const r = await ctx.db
+    .prepare("SELECT COALESCE(SUM(amount), 0) AS s FROM ecash_proofs WHERE state != 'spent'")
+    .first<{ s: number }>();
   return r?.s ?? 0;
 }
 
@@ -117,7 +126,9 @@ export async function potByMint(ctx: Ctx): Promise<Map<string, { held: number; u
     )
     .all<{ mint_url: string; held: number; unspent: number }>();
   const owed = await ctx.db
-    .prepare("SELECT mint_url, COALESCE(SUM(balance), 0) AS owed FROM ecash_keys WHERE mint_url IS NOT NULL GROUP BY mint_url")
+    .prepare(
+      "SELECT mint_url, COALESCE(SUM(balance), 0) AS owed FROM ecash_keys WHERE mint_url IS NOT NULL GROUP BY mint_url",
+    )
     .all<{ mint_url: string; owed: number }>();
   const out = new Map<string, { held: number; unspent: number; owed: number }>();
   for (const r of held.results) out.set(r.mint_url, { held: r.held, unspent: r.unspent, owed: 0 });
@@ -134,12 +145,23 @@ export async function potByMint(ctx: Ctx): Promise<Map<string, { held: number; u
  * when `opId` held that proof as a reserved input: cashu-ts `send` returns inputs it didn't use unchanged in `keep`,
  * and those must come back to `unspent` (the batch marked all of the op's reserved inputs spent just before).
  */
-export async function sealProofStmts(ctx: Ctx, mintUrl: string, proofs: Proof[], opId: string): Promise<D1PreparedStatement[]> {
+export async function sealProofStmts(
+  ctx: Ctx,
+  mintUrl: string,
+  proofs: Proof[],
+  opId: string,
+): Promise<D1PreparedStatement[]> {
   const now = ctx.now();
   const out: D1PreparedStatement[] = [];
   for (const p of proofs) {
     const y = proofY(p.secret);
-    const plain = JSONInt.stringify({ id: p.id, amount: sats(p.amount), secret: p.secret, C: p.C, ...(p.dleq ? { dleq: p.dleq } : {}) }) as string;
+    const plain = JSONInt.stringify({
+      id: p.id,
+      amount: sats(p.amount),
+      secret: p.secret,
+      C: p.C,
+      ...(p.dleq ? { dleq: p.dleq } : {}),
+    }) as string;
     const sealed = await ctx.sealer.seal(plain, y);
     out.push(
       ctx.db
@@ -182,7 +204,9 @@ export async function reserveProofs(ctx: Ctx, rows: ProofRow[], opId: string): P
   const ys = rows.map((r) => r.y);
   const marks = ys.map((_, i) => `?${i + 3}`).join(",");
   const r = await ctx.db
-    .prepare(`UPDATE ecash_proofs SET state = 'reserved', op_id = ?1, updated_at = ?2 WHERE state = 'unspent' AND y IN (${marks})`)
+    .prepare(
+      `UPDATE ecash_proofs SET state = 'reserved', op_id = ?1, updated_at = ?2 WHERE state = 'unspent' AND y IN (${marks})`,
+    )
     .bind(opId, ctx.now(), ...ys)
     .run();
   if (r.meta.changes === rows.length) return true;
@@ -192,7 +216,9 @@ export async function reserveProofs(ctx: Ctx, rows: ProofRow[], opId: string): P
 
 export async function releaseProofs(ctx: Ctx, opId: string): Promise<void> {
   await ctx.db
-    .prepare("UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE op_id = ?1 AND state = 'reserved'")
+    .prepare(
+      "UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE op_id = ?1 AND state = 'reserved'",
+    )
     .bind(opId, ctx.now())
     .run();
 }
@@ -202,17 +228,30 @@ export async function releaseProofs(ctx: Ctx, opId: string): Promise<void> {
  * pot. Returns null while any is PENDING at the mint (try again later).
  */
 export async function settleReservedByState(
-  ctx: Ctx, opId: string, wallet: { checkProofsStates(p: Proof[]): Promise<Array<{ state: string }>> },
+  ctx: Ctx,
+  opId: string,
+  wallet: { checkProofsStates(p: Proof[]): Promise<Array<{ state: string }>> },
 ): Promise<{ anySpent: boolean } | null> {
-  const rows = (await ctx.db.prepare("SELECT * FROM ecash_proofs WHERE op_id = ? AND state = 'reserved'").bind(opId).all<ProofRow>()).results;
+  const rows = (
+    await ctx.db.prepare("SELECT * FROM ecash_proofs WHERE op_id = ? AND state = 'reserved'").bind(opId).all<ProofRow>()
+  ).results;
   if (rows.length === 0) return { anySpent: false };
   const states = await wallet.checkProofsStates(await openProofs(ctx, rows));
   if (states.some((s) => s.state === "PENDING")) return null;
   const now = ctx.now();
   const stmts = rows.map((r, i) =>
     states[i]?.state === "SPENT"
-      ? ctx.db.prepare("UPDATE ecash_proofs SET state = 'spent', updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'").bind(r.y, now, opId)
-      : ctx.db.prepare("UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'").bind(r.y, now, opId));
+      ? ctx.db
+          .prepare(
+            "UPDATE ecash_proofs SET state = 'spent', updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'",
+          )
+          .bind(r.y, now, opId)
+      : ctx.db
+          .prepare(
+            "UPDATE ecash_proofs SET state = 'unspent', op_id = NULL, updated_at = ?2 WHERE y = ?1 AND op_id = ?3 AND state = 'reserved'",
+          )
+          .bind(r.y, now, opId),
+  );
   await ctx.db.batch(stmts);
   return { anySpent: states.some((s) => s.state === "SPENT") };
 }
@@ -221,7 +260,11 @@ export async function settleReservedByState(
  * Fails a refund op and puts its amount back on the key, at most once: the credit runs only if THIS batch flipped the
  * op from pending to failed (same claim pattern as creditBatch). Safe against two overlapping recovery runs.
  */
-export async function failRefundAndGiveBack(ctx: Ctx, op: Pick<OpRow, "op_id" | "key_hash" | "amount">, code: string): Promise<boolean> {
+export async function failRefundAndGiveBack(
+  ctx: Ctx,
+  op: Pick<OpRow, "op_id" | "key_hash" | "amount">,
+  code: string,
+): Promise<boolean> {
   const claim = randomId();
   const res = await ctx.db.batch([
     ctx.db
@@ -263,7 +306,10 @@ export async function getOpByInput(ctx: Ctx, inputId: string): Promise<OpRow | n
 
 export function insertOpStmt(
   ctx: Ctx,
-  op: Pick<OpRow, "op_id" | "kind" | "key_hash" | "mint_url" | "input_id" | "amount" | "keyset_id" | "counter_start" | "counter_count"> & { detail?: Record<string, unknown> },
+  op: Pick<
+    OpRow,
+    "op_id" | "kind" | "key_hash" | "mint_url" | "input_id" | "amount" | "keyset_id" | "counter_start" | "counter_count"
+  > & { detail?: Record<string, unknown> },
 ): D1PreparedStatement {
   const now = ctx.now();
   return ctx.db
@@ -271,8 +317,19 @@ export function insertOpStmt(
       `INSERT INTO ecash_ops (op_id, kind, status, key_hash, mint_url, input_id, amount, keyset_id, counter_start, counter_count, detail, created_at, updated_at)
        VALUES (?1, ?2, 'pending', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)`,
     )
-    .bind(op.op_id, op.kind, op.key_hash, op.mint_url, op.input_id, op.amount, op.keyset_id, op.counter_start, op.counter_count,
-      op.detail ? JSON.stringify(op.detail) : null, now);
+    .bind(
+      op.op_id,
+      op.kind,
+      op.key_hash,
+      op.mint_url,
+      op.input_id,
+      op.amount,
+      op.keyset_id,
+      op.counter_start,
+      op.counter_count,
+      op.detail ? JSON.stringify(op.detail) : null,
+      now,
+    );
 }
 
 export async function failOp(ctx: Ctx, opId: string, code: string, clearInput: boolean): Promise<void> {
@@ -302,7 +359,11 @@ export function opDetail(op: OpRow): Record<string, unknown> {
  * Returns false if the op was already settled by someone else.
  */
 export async function creditBatch(
-  ctx: Ctx, op: Pick<OpRow, "op_id" | "mint_url" | "key_hash">, proofs: Proof[], credited: number, fee: number,
+  ctx: Ctx,
+  op: Pick<OpRow, "op_id" | "mint_url" | "key_hash">,
+  proofs: Proof[],
+  credited: number,
+  fee: number,
   extraDetail: Record<string, unknown> = {},
 ): Promise<boolean> {
   const claim = randomId();
@@ -335,7 +396,10 @@ export class D1CounterSource implements CounterSource {
 
   async reserve(keysetId: string, n: number): Promise<CounterRange> {
     if (n === 0) {
-      const r = await this.db.prepare("SELECT next FROM ecash_counters WHERE keyset_id = ?").bind(keysetId).first<{ next: number }>();
+      const r = await this.db
+        .prepare("SELECT next FROM ecash_counters WHERE keyset_id = ?")
+        .bind(keysetId)
+        .first<{ next: number }>();
       return { start: r?.next ?? 1, count: 0 };
     }
     // Counters start at 1: cashu-ts reads a counter of 0 as "auto".

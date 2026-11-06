@@ -64,7 +64,10 @@ describe("T-TOP-3 same token in parallel", () => {
     expect(codes.every((c) => ["ok", "ECASH_TOKEN_SPENT", "ECASH_PENDING"].includes(c))).toBe(true);
     const row = await keyRow(db(), key);
     expect(row!.balance).toBe(50 - faucet.feeFor(t));
-    const ops = await db().prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE key_hash = ? AND status = 'done'").bind(await keyHash(key)).first<{ n: number }>();
+    const ops = await db()
+      .prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE key_hash = ? AND status = 'done'")
+      .bind(await keyHash(key))
+      .first<{ n: number }>();
     expect(ops!.n).toBe(1);
   });
 });
@@ -116,7 +119,9 @@ describe("T-REF-1 / T-REF-2 refund", () => {
     expect(ref.token).toMatch(/^cashuB/);
     expect(ref.feeSats).toBeGreaterThanOrEqual(1);
     expect(ref.amountSats).toBe(88 - ref.feeSats);
-    expect(faucet.wallet.decodeToken(ref.token).proofs.reduce((s, p) => s + p.amount.toNumber(), 0)).toBe(88 - ref.feeSats);
+    expect(faucet.wallet.decodeToken(ref.token).proofs.reduce((s, p) => s + p.amount.toNumber(), 0)).toBe(
+      88 - ref.feeSats,
+    );
     expect((await pw.balance(r.key!)).balanceSats).toBe(0);
     const got = await claim(ref.token);
     expect(got).toBe(ref.amountSats - faucet.feeFor(ref.token));
@@ -130,7 +135,10 @@ describe("T-REF-1 / T-REF-2 refund", () => {
     const r = await pw.topupWithToken(t);
     const start = r.balanceSats;
     const [refundRes, ...debits] = await Promise.all([
-      pw.refund(r.key!).then((x) => x, (e) => e as PaywallError),
+      pw.refund(r.key!).then(
+        (x) => x,
+        (e) => e as PaywallError,
+      ),
       ...Array.from({ length: 10 }, () => pw.debit(r.key!, 5)),
     ]);
     const debited = debits.filter((d) => d.ok).length * 5;

@@ -40,14 +40,20 @@ describe("T-402-5 400 cases", () => {
 
     const usd = testWallet("usd");
     await usd.loadMint();
-    const usdToken = getEncodedToken({ mint: "https://testnut.cashu.space", proofs: await mintProofs(usd, 10), unit: "usd" });
+    const usdToken = getEncodedToken({
+      mint: "https://testnut.cashu.space",
+      proofs: await mintProofs(usd, 10),
+      unit: "usd",
+    });
     expect(await codeOf(await h(req({ "X-Cashu": usdToken })))).toEqual([400, "ECASH_UNIT_NOT_ALLOWED"]);
 
     const small = await faucet.token(3);
     expect(await codeOf(await h(req({ "X-Cashu": small })))).toEqual([400, "ECASH_AMOUNT_TOO_LOW"]);
     expect(await claim(small)).toBeGreaterThan(0); // the 3-sat token was NOT taken
 
-    const pub = Array.from(getPubKeyFromPrivKey(crypto.getRandomValues(new Uint8Array(32))), (b) => b.toString(16).padStart(2, "0")).join("");
+    const pub = Array.from(getPubKeyFromPrivKey(crypto.getRandomValues(new Uint8Array(32))), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
     const locked = await faucet.token(10, { p2pkPubkey: pub });
     expect(await codeOf(await h(req({ "X-Cashu": locked })))).toEqual([400, "ECASH_TOKEN_LOCKED"]);
   });
@@ -68,12 +74,16 @@ describe("T-402-6 mint down", () => {
     expect(res.status).toBe(503);
     expect(res.headers.get("Retry-After")).toBe("30");
     expect(((await res.json()) as { code: string }).code).toBe("ECASH_PENDING");
-    const op = await db().prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token' ORDER BY created_at DESC LIMIT 1").first<{ status: string }>();
+    const op = await db()
+      .prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token' ORDER BY created_at DESC LIMIT 1")
+      .first<{ status: string }>();
     expect(op!.status).toBe("pending");
     expect(await claim(t)).toBe(10 - faucet.feeFor(t)); // still the payer's money
   });
   it("mint unreachable before the swap -> 503 ECASH_MINT_UNAVAILABLE, nothing written", async () => {
-    const down: typeof fetch = async () => { throw new TypeError("connection refused (simulated)"); };
+    const down: typeof fetch = async () => {
+      throw new TypeError("connection refused (simulated)");
+    };
     const pw = makePaywall(env.DB_REC, { fetch: down });
     const t = await faucet.token(10);
     const res = await pw.protect(fortune, { priceSats: 5 })(req({ "X-Cashu": t }));
@@ -85,9 +95,13 @@ describe("T-402-6 mint down", () => {
 describe("T-LN-1 / T-LN-2 Lightning top-up", () => {
   it("quote -> invoice, new key, status_url, no quote id; paid -> CREDITED 200 once", async () => {
     const pw = makePaywall(db());
-    const res = (await pw.handleRoutes(new Request("https://paywall.test/ecash/lightning", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount_sats: 200 }),
-    })))!;
+    const res = (await pw.handleRoutes(
+      new Request("https://paywall.test/ecash/lightning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_sats: 200 }),
+      }),
+    ))!;
     expect(res.status).toBe(200);
     const j = (await res.json()) as Record<string, any>;
     expect(j.invoice).toMatch(/^lnbc/);
@@ -95,7 +109,10 @@ describe("T-LN-1 / T-LN-2 Lightning top-up", () => {
     expect(j.amount_sats).toBe(200);
     expect(j.status_url).toBe(`https://paywall.test/ecash/lightning/${j.op_id}`);
     expect(j.qr_svg).toContain("<svg");
-    const op = await db().prepare("SELECT input_id, detail FROM ecash_ops WHERE op_id = ?").bind(j.op_id).first<{ input_id: string; detail: string }>();
+    const op = await db()
+      .prepare("SELECT input_id, detail FROM ecash_ops WHERE op_id = ?")
+      .bind(j.op_id)
+      .first<{ input_id: string; detail: string }>();
     expect(JSON.stringify(j)).not.toContain(op!.input_id); // the quote id never leaves the server
     expect(JSON.parse(op!.detail).locked).toBe(true); // NUT-20 locked quote (P1-4)
 
@@ -111,7 +128,10 @@ describe("T-LN-1 / T-LN-2 Lightning top-up", () => {
     const again = await poll();
     expect(again).toMatchObject({ state: "CREDITED", balance_sats: 200 });
     // Two racing polls on a fresh op can't double-credit either.
-    const ops = await db().prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE op_id = ? AND status = 'done'").bind(j.op_id).first<{ n: number }>();
+    const ops = await db()
+      .prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE op_id = ? AND status = 'done'")
+      .bind(j.op_id)
+      .first<{ n: number }>();
     expect(ops!.n).toBe(1);
     expect((await keyRow(db(), j.key))!.balance).toBe(200);
     expect((await pw.balance(j.key)).balanceSats).toBe(200);

@@ -18,7 +18,12 @@ export interface PaymentHeaders {
   balanceSats: number;
 }
 
-function paymentRequiredResponse(ctx: Ctx, priceSats: number, description?: string, extra: Record<string, unknown> = {}): Response {
+function paymentRequiredResponse(
+  ctx: Ctx,
+  priceSats: number,
+  description?: string,
+  extra: Record<string, unknown> = {},
+): Response {
   const pr = paymentRequest(ctx, priceSats, { description });
   return json(
     {
@@ -52,7 +57,9 @@ export function withPaymentHeaders(res: Response, h: PaymentHeaders): Response {
  * Returns null when there is no X-Cashu header.
  */
 export async function topupFromHeader(
-  ctx: Ctx, request: Request, minCreditSats?: number,
+  ctx: Ctx,
+  request: Request,
+  minCreditSats?: number,
 ): Promise<{ key: EcashKey; created?: EcashKey; kid: string; balanceSats: number } | null> {
   const token = request.headers.get("X-Cashu");
   if (token === null) return null;
@@ -68,7 +75,8 @@ export async function topupFromHeader(
 
 export function protect(ctx: Ctx, handler: PaidHandler, opts: { priceSats: number; description?: string }) {
   const price = opts.priceSats;
-  if (!Number.isSafeInteger(price) || price <= 0) throw new Error("cashu-paywall: protect() priceSats must be a positive integer");
+  if (!Number.isSafeInteger(price) || price <= 0)
+    throw new Error("cashu-paywall: protect() priceSats must be a positive integer");
   return async (request: Request): Promise<Response> => {
     let created: EcashKey | undefined;
     try {
@@ -90,8 +98,16 @@ export function protect(ctx: Ctx, handler: PaidHandler, opts: { priceSats: numbe
       if (!d.ok) {
         if (d.error.code === "ECASH_INSUFFICIENT_BALANCE") {
           // Answer like an unpaid request, plus the balance so the client knows why.
-          const res = paymentRequiredResponse(ctx, price, opts.description, { balance_sats: d.error.details?.balance_sats ?? 0 });
-          return created ? withPaymentHeaders(res, { key: created, kid: "", balanceSats: Number(d.error.details?.balance_sats ?? 0) }) : res;
+          const res = paymentRequiredResponse(ctx, price, opts.description, {
+            balance_sats: d.error.details?.balance_sats ?? 0,
+          });
+          return created
+            ? withPaymentHeaders(res, {
+                key: created,
+                kid: "",
+                balanceSats: Number(d.error.details?.balance_sats ?? 0),
+              })
+            : res;
         }
         if (d.error.code === "ECASH_KEY_INVALID" && !(await rateLimit(ctx, "badkey", clientIp(request)))) {
           throw new PaywallError("ECASH_RATE_LIMITED");

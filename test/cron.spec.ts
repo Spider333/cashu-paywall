@@ -7,15 +7,20 @@ const db = () => env.DB_REC;
 const DAILY = { cron: "0 3 * * *", scheduledTime: Date.now() };
 
 async function wipe() {
-  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_counters", "ecash_mint_cache"]) await db().prepare(`DELETE FROM ${t}`).run();
+  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_counters", "ecash_mint_cache"])
+    await db().prepare(`DELETE FROM ${t}`).run();
 }
 
 /** Fake pot rows (never opened: the melt decides to skip before touching them). */
 async function fakePot(amounts: number[]) {
   let i = 0;
   for (const a of amounts) {
-    await db().prepare("INSERT INTO ecash_proofs (y, mint_url, keyset_id, amount, sealed, created_at, updated_at) VALUES (?, 'https://testnut.cashu.space', 'k', ?, 'x', 0, 0)")
-      .bind(`y${i++}-${crypto.randomUUID()}`, a).run();
+    await db()
+      .prepare(
+        "INSERT INTO ecash_proofs (y, mint_url, keyset_id, amount, sealed, created_at, updated_at) VALUES (?, 'https://testnut.cashu.space', 'k', ?, 'x', 0, 0)",
+      )
+      .bind(`y${i++}-${crypto.randomUUID()}`, a)
+      .run();
   }
 }
 
@@ -51,12 +56,17 @@ describe("T-MELT-2 never melts user float", () => {
     let calls = 0;
     const pw = makePaywall(db(), {
       melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 },
-      fetch: async () => { calls++; throw new Error("no network in this test"); },
+      fetch: async () => {
+        calls++;
+        throw new Error("no network in this test");
+      },
     });
     const r = await pw.scheduled(DAILY);
     expect(r.skipped).toEqual([{ mint: "https://testnut.cashu.space", reason: "below threshold" }]);
     expect(r.invariantOk).toBe(true);
-    const reserved = await db().prepare("SELECT COUNT(*) AS n FROM ecash_proofs WHERE state != 'unspent'").first<{ n: number }>();
+    const reserved = await db()
+      .prepare("SELECT COUNT(*) AS n FROM ecash_proofs WHERE state != 'unspent'")
+      .first<{ n: number }>();
     expect(reserved!.n).toBe(0);
     expect(calls).toBe(0);
   });
@@ -103,15 +113,27 @@ describe("review #5: recovery can't be starved", () => {
   it("ops that can't finish move to the back of the queue, so the next run reaches the others", async () => {
     const old = Date.now() - 60 * 60 * 1000;
     for (let i = 0; i < 25; i++) {
-      await db().prepare(
-        "INSERT INTO ecash_ops (op_id, kind, status, mint_url, input_id, amount, counter_start, counter_count, created_at, updated_at) VALUES (?, 'topup_lightning', 'pending', 'https://testnut.cashu.space', ?, 10, 1, 64, ?, ?)",
-      ).bind(crypto.randomUUID(), `q${i}`, old, old + i).run();
+      await db()
+        .prepare(
+          "INSERT INTO ecash_ops (op_id, kind, status, mint_url, input_id, amount, counter_start, counter_count, created_at, updated_at) VALUES (?, 'topup_lightning', 'pending', 'https://testnut.cashu.space', ?, 10, 1, 64, ?, ?)",
+        )
+        .bind(crypto.randomUUID(), `q${i}`, old, old + i)
+        .run();
     }
-    const down = makePaywall(db(), { fetch: async () => { throw new TypeError("mint down (simulated)"); } });
+    const down = makePaywall(db(), {
+      fetch: async () => {
+        throw new TypeError("mint down (simulated)");
+      },
+    });
     await down.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() });
-    const untouched = await db().prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE updated_at < ?").bind(old + 1000).first<{ n: number }>();
+    const untouched = await db()
+      .prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE updated_at < ?")
+      .bind(old + 1000)
+      .first<{ n: number }>();
     expect(untouched!.n).toBe(5); // 20 attempted and moved back; the 5 behind them come first next time
-    const firstNext = await db().prepare("SELECT input_id FROM ecash_ops WHERE status = 'pending' ORDER BY updated_at LIMIT 1").first<{ input_id: string }>();
+    const firstNext = await db()
+      .prepare("SELECT input_id FROM ecash_ops WHERE status = 'pending' ORDER BY updated_at LIMIT 1")
+      .first<{ input_id: string }>();
     expect(firstNext!.input_id).toBe("q20");
   });
 });

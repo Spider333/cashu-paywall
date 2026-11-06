@@ -5,7 +5,8 @@ import { hostOf, topupUrl } from "../core/context.js";
 import { base64urlEncode } from "../core/crypto.js";
 import { paymentRequest } from "../core/requests.js";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const esc = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export function qrSvg(data: string): string {
   return renderSVG(data, { border: 2, ecc: "L" });

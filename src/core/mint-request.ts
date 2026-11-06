@@ -29,7 +29,9 @@ export function createMintRequest(fetchFn: typeof fetch, timeoutMs = MINT_TIMEOU
         redirect: "manual",
       });
     } catch (e) {
-      throw new NetworkError(controller.signal.aborted ? "Mint request timed out" : "Mint request failed", { cause: e });
+      throw new NetworkError(controller.signal.aborted ? "Mint request timed out" : "Mint request failed", {
+        cause: e,
+      });
     } finally {
       clearTimeout(timer);
     }

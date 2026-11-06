@@ -33,7 +33,12 @@ const receiver = new Wallet(MINT, { denominationTarget: 1, bip39seed: crypto.get
 receiver.loadMintFromCache(payer.getMintInfo().cache, payer.keyChain.cache);
 let counter = 1;
 
-const samples = { "mint HTTP GET /v1/keys": [], "receive 100 sats": [], "receive 1000 sats": [], "send (refund) 1000 sats": [] };
+const samples = {
+  "mint HTTP GET /v1/keys": [],
+  "receive 100 sats": [],
+  "receive 1000 sats": [],
+  "send (refund) 1000 sats": [],
+};
 const shapes = {};
 
 // Round 0 warms up the JIT and is not counted.
@@ -53,10 +58,15 @@ for (let round = 0; round <= ROUNDS; round++) {
     if (amount === 1000) {
       const sendAmount = 1000 - 20;
       const [res, sendMs] = await cpuMs(() =>
-        receiver.send(sendAmount, proofs, { includeFees: false }, {
-          send: { type: "deterministic", counter },
-          keep: { type: "deterministic", counter: counter + 32 },
-        }),
+        receiver.send(
+          sendAmount,
+          proofs,
+          { includeFees: false },
+          {
+            send: { type: "deterministic", counter },
+            keep: { type: "deterministic", counter: counter + 32 },
+          },
+        ),
       );
       counter += 64;
       if (round > 0) samples["send (refund) 1000 sats"].push(sendMs);

@@ -12,14 +12,22 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 export async function getWallet(ctx: Ctx, mintUrl: string): Promise<Wallet> {
   const mint = new Mint(mintUrl, { customRequest: ctx.mintRequest });
   // denominationTarget 1 = minimal splits, so one op's outputs always fit its COUNTER_BLOCK (and a restore finds them all).
-  const wallet = new Wallet(mint, { unit: "sat", bip39seed: ctx.seed, counterSource: new D1CounterSource(ctx.db), denominationTarget: 1 });
+  const wallet = new Wallet(mint, {
+    unit: "sat",
+    bip39seed: ctx.seed,
+    counterSource: new D1CounterSource(ctx.db),
+    denominationTarget: 1,
+  });
   const row = await ctx.db
     .prepare("SELECT info_json, keys_json, fetched_at FROM ecash_mint_cache WHERE mint_url = ?")
     .bind(mintUrl)
     .first<{ info_json: string; keys_json: string; fetched_at: number }>();
   if (row && ctx.now() - row.fetched_at < CACHE_TTL_MS) {
     try {
-      wallet.loadMintFromCache(JSONInt.parse(row.info_json) as GetInfoResponse, JSONInt.parse(row.keys_json) as KeyChainCache);
+      wallet.loadMintFromCache(
+        JSONInt.parse(row.info_json) as GetInfoResponse,
+        JSONInt.parse(row.keys_json) as KeyChainCache,
+      );
       return wallet;
     } catch {
       // stale or incompatible cache: fall through and refetch

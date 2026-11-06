@@ -10,7 +10,10 @@ import { errorFields } from "../core/redact.js";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE, ...headers } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE, ...headers },
+  });
 }
 
 /** Any error -> the shared JSON error body with the right status and Retry-After. Unknown errors become ECASH_INTERNAL. */

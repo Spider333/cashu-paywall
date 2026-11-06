@@ -13,18 +13,39 @@ export async function connect(paywall: Paywall, key: EcashKey | null, priceSats 
   const getKey = () => key;
   registerEcashTools(server, paywall, { getKey, priceSats });
   let ran = 0;
-  server.registerTool("paid_ok", { description: "x".repeat(81), inputSchema: {} },
-    withEcashCharge(paywall, { getKey, priceSats }, async () => { ran++; return { content: [{ type: "text", text: "{\"ok\":true}" }] }; }));
-  server.registerTool("paid_matched", { description: "x".repeat(81), inputSchema: {} },
-    withEcashCharge(paywall, { getKey, priceSats, refundOn: (e) => e instanceof Matched }, async () => { ran++; throw new Matched("data source down"); }));
-  server.registerTool("paid_unmatched", { description: "x".repeat(81), inputSchema: { n: z.number().optional().describe("unused number here") } },
-    withEcashCharge(paywall, { getKey, priceSats, refundOn: (e) => e instanceof Matched }, async () => { ran++; throw new Error("boom"); }));
+  server.registerTool(
+    "paid_ok",
+    { description: "x".repeat(81), inputSchema: {} },
+    withEcashCharge(paywall, { getKey, priceSats }, async () => {
+      ran++;
+      return { content: [{ type: "text", text: '{"ok":true}' }] };
+    }),
+  );
+  server.registerTool(
+    "paid_matched",
+    { description: "x".repeat(81), inputSchema: {} },
+    withEcashCharge(paywall, { getKey, priceSats, refundOn: (e) => e instanceof Matched }, async () => {
+      ran++;
+      throw new Matched("data source down");
+    }),
+  );
+  server.registerTool(
+    "paid_unmatched",
+    { description: "x".repeat(81), inputSchema: { n: z.number().optional().describe("unused number here") } },
+    withEcashCharge(paywall, { getKey, priceSats, refundOn: (e) => e instanceof Matched }, async () => {
+      ran++;
+      throw new Error("boom");
+    }),
+  );
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
   const client = new Client({ name: "test-client", version: "0.0.0" });
   await client.connect(b);
   const call = async (name: string, args: Record<string, unknown> = {}) => {
-    const r = (await client.callTool({ name, arguments: args })) as { isError?: boolean; content: Array<{ text: string }> };
+    const r = (await client.callTool({ name, arguments: args })) as {
+      isError?: boolean;
+      content: Array<{ text: string }>;
+    };
     return { isError: r.isError === true, body: JSON.parse(r.content[0]!.text) as Record<string, any> };
   };
   return { client, call, ran: () => ran };

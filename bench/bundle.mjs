@@ -40,5 +40,7 @@ for (const [name, contents] of Object.entries(entries)) {
     logLevel: "error",
   });
   const code = result.outputFiles[0].contents;
-  console.log(`${name.padEnd(36)} ${kb(code.length).padStart(7)} raw  ${kb(gzipSync(code).length).padStart(6)} gzipped`);
+  console.log(
+    `${name.padEnd(36)} ${kb(code.length).padStart(7)} raw  ${kb(gzipSync(code).length).padStart(6)} gzipped`,
+  );
 }

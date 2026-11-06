@@ -4,8 +4,21 @@ import type { Ctx } from "../core/context.js";
 import { hostOf } from "../core/context.js";
 import { errorFields } from "../core/redact.js";
 import {
-  CHANGE_OFFSET, COUNTER_BLOCK, D1CounterSource, KEEP_OFFSET, failOp, insertOpStmt, newOpId, openProofs, releaseProofs,
-  reserveProofs, sats, sealProofStmts, selectProofs, spendReservedStmt, sumSats,
+  CHANGE_OFFSET,
+  COUNTER_BLOCK,
+  D1CounterSource,
+  KEEP_OFFSET,
+  failOp,
+  insertOpStmt,
+  newOpId,
+  openProofs,
+  releaseProofs,
+  reserveProofs,
+  sats,
+  sealProofStmts,
+  selectProofs,
+  spendReservedStmt,
+  sumSats,
 } from "../core/store.js";
 import { getWallet } from "../core/wallet.js";
 
@@ -26,7 +39,8 @@ async function invoiceFromAddress(ctx: Ctx, address: string, amountSats: number)
     return j as Record<string, unknown>;
   };
   const meta = await getJson(`https://${domain.toLowerCase()}/.well-known/lnurlp/${encodeURIComponent(name)}`);
-  if (meta.status === "ERROR" || meta.tag !== "payRequest" || typeof meta.callback !== "string") throw new MeltAbort("lnurl_not_pay_request");
+  if (meta.status === "ERROR" || meta.tag !== "payRequest" || typeof meta.callback !== "string")
+    throw new MeltAbort("lnurl_not_pay_request");
   const callback = new URL(meta.callback);
   if (callback.protocol !== "https:") throw new MeltAbort("lnurl_callback_not_https");
   const msat = amountSats * 1000;
@@ -69,20 +83,36 @@ export async function meltMint(ctx: Ctx, mintUrl: string, unspent: number, owed:
     return { skipped: { mint: mintUrl, reason: "could not size the invoice within the meltable amount" } };
   } catch (e) {
     const reason = e instanceof MeltAbort ? e.message : "melt_error";
-    ctx.log.error("ecash_melt_aborted", { mint_host: hostOf(mintUrl), reason, ...(e instanceof MeltAbort ? {} : errorFields(e)) });
+    ctx.log.error("ecash_melt_aborted", {
+      mint_host: hostOf(mintUrl),
+      reason,
+      ...(e instanceof MeltAbort ? {} : errorFields(e)),
+    });
     return { skipped: { mint: mintUrl, reason } };
   }
 }
 
 async function runMelt(
-  ctx: Ctx, wallet: Awaited<ReturnType<typeof getWallet>>, mintUrl: string,
-  quote: Awaited<ReturnType<typeof wallet.createMeltQuoteBolt11>>, picked: NonNullable<Awaited<ReturnType<typeof selectProofs>>>, amount: number,
+  ctx: Ctx,
+  wallet: Awaited<ReturnType<typeof getWallet>>,
+  mintUrl: string,
+  quote: Awaited<ReturnType<typeof wallet.createMeltQuoteBolt11>>,
+  picked: NonNullable<Awaited<ReturnType<typeof selectProofs>>>,
+  amount: number,
 ): Promise<MeltOutcome> {
   const opId = newOpId();
   const range = await new D1CounterSource(ctx.db).reserve(wallet.keysetId, COUNTER_BLOCK);
   await insertOpStmt(ctx, {
-    op_id: opId, kind: "melt", key_hash: null, mint_url: mintUrl, input_id: `melt:${quote.quote}`, amount,
-    keyset_id: wallet.keysetId, counter_start: range.start, counter_count: range.count, detail: { quote: quote.quote },
+    op_id: opId,
+    kind: "melt",
+    key_hash: null,
+    mint_url: mintUrl,
+    input_id: `melt:${quote.quote}`,
+    amount,
+    keyset_id: wallet.keysetId,
+    counter_start: range.start,
+    counter_count: range.count,
+    detail: { quote: quote.quote },
   }).run();
   if (!(await reserveProofs(ctx, picked, opId))) {
     await failOp(ctx, opId, "reserve_conflict", false);
@@ -92,11 +122,21 @@ async function runMelt(
   const inputSum = sumSats(inputs);
   try {
     // Swap to the exact amount + fee reserve first (outputs at +0 / +KEEP_OFFSET), then melt (change at +CHANGE_OFFSET).
-    const { send, keep } = await wallet.send(amount + sats(quote.fee_reserve), inputs, { includeFees: true, keysetId: wallet.keysetId }, {
-      send: { type: "deterministic", counter: range.start },
-      keep: { type: "deterministic", counter: range.start + KEEP_OFFSET },
-    });
-    const res = await wallet.meltProofsBolt11(quote, send, { keysetId: wallet.keysetId }, { type: "deterministic", counter: range.start + CHANGE_OFFSET });
+    const { send, keep } = await wallet.send(
+      amount + sats(quote.fee_reserve),
+      inputs,
+      { includeFees: true, keysetId: wallet.keysetId },
+      {
+        send: { type: "deterministic", counter: range.start },
+        keep: { type: "deterministic", counter: range.start + KEEP_OFFSET },
+      },
+    );
+    const res = await wallet.meltProofsBolt11(
+      quote,
+      send,
+      { keysetId: wallet.keysetId },
+      { type: "deterministic", counter: range.start + CHANGE_OFFSET },
+    );
     if (res.quote.state !== MeltQuoteState.PAID) {
       // PENDING (or an odd UNPAID): leave the op to the recovery job, which checks the quote and the inputs.
       ctx.log.warn("ecash_melt_pending", { op_id: opId, mint_host: hostOf(mintUrl), state: res.quote.state });

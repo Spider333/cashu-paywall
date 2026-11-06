@@ -54,7 +54,10 @@ export async function runScheduled(ctx: Ctx, controller: { cron: string; schedul
     report.deletedEmptyKeys = del.meta.changes;
   }
   ctx.log.info("ecash_cron", {
-    cron: controller.cron, recovered: report.recovered, melted: report.melted.length, invariant_ok: report.invariantOk,
+    cron: controller.cron,
+    recovered: report.recovered,
+    melted: report.melted.length,
+    invariant_ok: report.invariantOk,
     deleted_empty_keys: report.deletedEmptyKeys,
   });
   return report;

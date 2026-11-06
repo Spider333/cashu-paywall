@@ -107,14 +107,20 @@ function intOr(v: number | undefined, d: number, name: string): number {
 export function buildCtx(cfg: PaywallConfig): Ctx {
   if (!cfg || typeof cfg !== "object") throw new Error("cashu-paywall: config required");
   if (!cfg.db) throw new Error("cashu-paywall: db (D1 binding) required");
-  if (typeof cfg.keyPepper !== "string" || cfg.keyPepper.length < 32) throw new Error("cashu-paywall: keyPepper must be at least 32 characters");
+  if (typeof cfg.keyPepper !== "string" || cfg.keyPepper.length < 32)
+    throw new Error("cashu-paywall: keyPepper must be at least 32 characters");
   if (typeof cfg.walletSeed !== "string" || !/^[0-9a-fA-F]{128}$/.test(cfg.walletSeed)) {
     throw new Error("cashu-paywall: walletSeed must be a 64-byte seed as 128 hex characters");
   }
   if (cfg.unit && cfg.unit !== "sat") throw new Error("cashu-paywall: only unit 'sat' is supported");
-  const mints = (cfg.mints ?? []).map((m) => m.trim()).filter(Boolean).map(normalizeMintUrl);
+  const mints = (cfg.mints ?? [])
+    .map((m) => m.trim())
+    .filter(Boolean)
+    .map(normalizeMintUrl);
   if (mints.length === 0) throw new Error("cashu-paywall: at least one mint is required");
-  for (const m of mints) if (!m.startsWith("https://") && !m.startsWith("http://localhost")) throw new Error("cashu-paywall: mints must use https");
+  for (const m of mints)
+    if (!m.startsWith("https://") && !m.startsWith("http://localhost"))
+      throw new Error("cashu-paywall: mints must use https");
   let publicBaseUrl: string;
   try {
     publicBaseUrl = new URL(cfg.publicBaseUrl).toString().replace(/\/+$/, "");
@@ -149,7 +155,11 @@ export function buildCtx(cfg: PaywallConfig): Ctx {
     suggestedTopupSats: intOr(cfg.suggestedTopupSats, 10 * priceSats, "suggestedTopupSats"),
     encoding: cfg.requestEncoding ?? "creqA",
     limits,
-    melt: { lightningAddress, minSats: intOr(cfg.melt?.minSats, 2_000, "melt.minSats"), keepSats: intOr(cfg.melt?.keepSats, 500, "melt.keepSats") },
+    melt: {
+      lightningAddress,
+      minSats: intOr(cfg.melt?.minSats, 2_000, "melt.minSats"),
+      keepSats: intOr(cfg.melt?.keepSats, 500, "melt.keepSats"),
+    },
     seed: fromHex(cfg.walletSeed),
     sealer: new Sealer(cfg.proofKey ?? ""),
     log: safeLogger(cfg.logger),

@@ -58,7 +58,11 @@ describe("T-DEMO-1 paid route over NUT-24", () => {
     const fee = faucet.feeFor(token);
     const r2 = await SELF.fetch(`${BASE}/api/nut-fact?nut=24`, { headers: { "X-Cashu": token } });
     expect(r2.status).toBe(200);
-    expect(await r2.json()).toEqual({ nut: 24, title: "HTTP 402 Payment Required", url: "https://github.com/cashubtc/nuts/blob/main/24.md" });
+    expect(await r2.json()).toEqual({
+      nut: 24,
+      title: "HTTP 402 Payment Required",
+      url: "https://github.com/cashubtc/nuts/blob/main/24.md",
+    });
     expect(r2.headers.get("X-Ecash-Key")).toMatch(/^eck_/);
     expect(Number(r2.headers.get("X-Ecash-Balance"))).toBe(20 - fee - 5);
 
@@ -181,7 +185,12 @@ describe("T-MCP-5 X-Cashu on /mcp", () => {
 describe("N-4 JSON-RPC batch", () => {
   it("3 paid calls with 2 calls of credit: at most 2 succeed (or the batch is refused)", async () => {
     const { key } = await fundedKey(11); // 10 sats of credit = 2 calls at 5
-    const body = [1, 2, 3].map((i) => ({ jsonrpc: "2.0", id: 100 + i, method: "tools/call", params: { name: "echo", arguments: { text: `n${i}` } } }));
+    const body = [1, 2, 3].map((i) => ({
+      jsonrpc: "2.0",
+      id: 100 + i,
+      method: "tools/call",
+      params: { name: "echo", arguments: { text: `n${i}` } },
+    }));
     const r = await mcp("", null, bearer(key), body);
     if (Array.isArray(r.json)) {
       const errors = r.json.filter((x: any) => x.result?.isError);

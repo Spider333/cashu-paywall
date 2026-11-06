@@ -43,7 +43,13 @@ export function registerEcashTools(server: McpServer, paywall: Paywall, opts: Ec
         "Add credit to your ecash key by paying with a Cashu token (cashuB… or cashuA…) from an accepted mint. " +
         "The token is swapped at the mint and its value, minus the mint's small fee, becomes credit for paid tools. This call itself is free.",
       inputSchema: {
-        token: z.string().min(1).max(8192).describe("A Cashu ecash token string (cashuB… or legacy cashuA…) from one of the accepted mints, at most 8,192 characters."),
+        token: z
+          .string()
+          .min(1)
+          .max(8192)
+          .describe(
+            "A Cashu ecash token string (cashuB… or legacy cashuA…) from one of the accepted mints, at most 8,192 characters.",
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
@@ -53,8 +59,13 @@ export function registerEcashTools(server: McpServer, paywall: Paywall, opts: Ec
         const r = await paywall.topupWithToken(token, key ?? undefined);
         return text({
           ...(r.key ? { key: r.key, warning: "Save this key now; it is shown once." } : {}),
-          kid: r.kid, credited_sats: r.creditedSats, fee_sats: r.feeSats, balance_sats: r.balanceSats, mint: r.mint,
-          calls_left: callsLeft(r.balanceSats, price), price_sats_per_call: price,
+          kid: r.kid,
+          credited_sats: r.creditedSats,
+          fee_sats: r.feeSats,
+          balance_sats: r.balanceSats,
+          mint: r.mint,
+          calls_left: callsLeft(r.balanceSats, price),
+          price_sats_per_call: price,
         });
       } catch (e) {
         return fail(e);
@@ -77,8 +88,13 @@ export function registerEcashTools(server: McpServer, paywall: Paywall, opts: Ec
         if (!key) throw new PaywallError("ECASH_KEY_INVALID");
         const b = await paywall.balance(key);
         return text({
-          kid: b.kid, balance_sats: b.balanceSats, price_sats_per_call: price, calls_left: callsLeft(b.balanceSats, price),
-          mint: b.mint, accepted_mints: paywall.mints, topup_url: paywall.topupUrl,
+          kid: b.kid,
+          balance_sats: b.balanceSats,
+          price_sats_per_call: price,
+          calls_left: callsLeft(b.balanceSats, price),
+          mint: b.mint,
+          accepted_mints: paywall.mints,
+          topup_url: paywall.topupUrl,
           payment_request: paywall.paymentRequest(paywall.config.suggestedTopupSats ?? 10 * Math.max(1, price)),
         });
       } catch (e) {
@@ -102,7 +118,11 @@ export function registerEcashTools(server: McpServer, paywall: Paywall, opts: Ec
         if (!key) throw new PaywallError("ECASH_KEY_INVALID");
         const r = await paywall.refund(key);
         return text({
-          token: r.token, amount_sats: r.amountSats, fee_sats: r.feeSats, balance_sats: 0, mint: r.mint,
+          token: r.token,
+          amount_sats: r.amountSats,
+          fee_sats: r.feeSats,
+          balance_sats: 0,
+          mint: r.mint,
           warning: "This token is money. Paste it into a Cashu wallet now; anyone who sees it can claim it.",
         });
       } catch (e) {
@@ -114,7 +134,9 @@ export function registerEcashTools(server: McpServer, paywall: Paywall, opts: Ec
 
 /** Debit before running a paid tool. On failure, `result` is the tool error to return as is. */
 export async function chargeToolCall(
-  paywall: Paywall, key: EcashKey, priceSats: number,
+  paywall: Paywall,
+  key: EcashKey,
+  priceSats: number,
 ): Promise<{ ok: true; balanceSats: number } | { ok: false; result: CallToolResult }> {
   const d = await paywall.debit(key, priceSats);
   if (d.ok) return { ok: true, balanceSats: d.balanceSats };
@@ -122,7 +144,8 @@ export async function chargeToolCall(
   if (d.error.code === "ECASH_INSUFFICIENT_BALANCE") {
     body.price_sats = priceSats;
     body.topup_url = paywall.topupUrl;
-    body.how_to_pay = "Call ecash_topup with a Cashu token from an accepted mint, or open topup_url to pay by Lightning.";
+    body.how_to_pay =
+      "Call ecash_topup with a Cashu token from an accepted mint, or open topup_url to pay by Lightning.";
   }
   return { ok: false, result: text(body, true) };
 }
@@ -143,7 +166,10 @@ export function withEcashCharge<A>(
     } catch (e) {
       if (opts.refundOn?.(e)) {
         await paywall.credit(key, opts.priceSats, "data_source_error");
-        return text({ error: e instanceof Error ? e.message : "The tool failed.", refunded_sats: opts.priceSats }, true);
+        return text(
+          { error: e instanceof Error ? e.message : "The tool failed.", refunded_sats: opts.priceSats },
+          true,
+        );
       }
       return text({ error: "The tool failed.", code: "ECASH_INTERNAL", charged_sats: opts.priceSats }, true);
     }

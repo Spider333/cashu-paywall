@@ -89,8 +89,18 @@ describe("tool metadata (PRD 6.5 A)", () => {
       }
     }
     const byName = Object.fromEntries(ecash.map((t) => [t.name, t.annotations]));
-    expect(byName.ecash_topup).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+    expect(byName.ecash_topup).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
     expect(byName.ecash_balance).toMatchObject({ readOnlyHint: true, idempotentHint: true, openWorldHint: false });
-    expect(byName.ecash_refund).toMatchObject({ readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true });
+    expect(byName.ecash_refund).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
   });
 });

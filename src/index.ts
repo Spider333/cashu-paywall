@@ -2,7 +2,12 @@ import { balance, createKey, type BalanceInfo } from "./core/balance.js";
 import { buildCtx, type Ctx, type PaywallConfig, type RateLimiter } from "./core/context.js";
 import { credit, debit, type DebitResult } from "./core/debit.js";
 import { isEcashKey, type EcashKey } from "./core/keys.js";
-import { checkLightningTopup, startLightningTopup, type LightningTopup, type LightningTopupStatus } from "./core/lightning.js";
+import {
+  checkLightningTopup,
+  startLightningTopup,
+  type LightningTopup,
+  type LightningTopupStatus,
+} from "./core/lightning.js";
 import { refund, type RefundResult } from "./core/refund.js";
 import { paymentRequest } from "./core/requests.js";
 import { topupWithToken, type TopupResult } from "./core/topup.js";
@@ -16,8 +21,17 @@ export { redact, type PaywallLogger } from "./core/redact.js";
 export { MIGRATIONS_SQL } from "./core/migrations-sql.js";
 export { normalizeMintUrl } from "./core/context.js";
 export type {
-  PaywallConfig, RateLimiter, EcashKey, BalanceInfo, TopupResult, LightningTopup, LightningTopupStatus, DebitResult, RefundResult,
-  CronReport, PaidHandler,
+  PaywallConfig,
+  RateLimiter,
+  EcashKey,
+  BalanceInfo,
+  TopupResult,
+  LightningTopup,
+  LightningTopupStatus,
+  DebitResult,
+  RefundResult,
+  CronReport,
+  PaidHandler,
 };
 
 /** A paywall bound to one D1 database and config. Every method is safe to call from a Worker's fetch or scheduled handler. */
@@ -53,7 +67,10 @@ export interface Paywall {
    * Wraps a handler behind NUT-24: `402` with `X-Cashu: creqA…` when unpaid, served after a debit when the request
    * carries a token in `X-Cashu` or `Authorization: Bearer eck_…` with enough credit.
    */
-  protect(handler: PaidHandler, opts: { priceSats: number; description?: string }): (request: Request) => Promise<Response>;
+  protect(
+    handler: PaidHandler,
+    opts: { priceSats: number; description?: string },
+  ): (request: Request) => Promise<Response>;
   /**
    * The cron entry point. Every run settles stuck operations and checks that the pot covers all balances. The daily
    * cron `0 3 * * *` also melts surplus sats to `melt.lightningAddress` and deletes never-funded keys older than 7 days.
@@ -63,7 +80,9 @@ export interface Paywall {
    * For servers that guard their own routes (like the demo's /mcp): tops up from an `X-Cashu` header (with an optional
    * bearer key) and returns the key to use, or null when the request has no `X-Cashu` header. Throws PaywallError.
    */
-  topupFromRequest(request: Request): Promise<{ key: EcashKey; created?: EcashKey; kid: string; balanceSats: number } | null>;
+  topupFromRequest(
+    request: Request,
+  ): Promise<{ key: EcashKey; created?: EcashKey; kid: string; balanceSats: number } | null>;
   /** Adds `X-Ecash-Key` (only when created), `X-Ecash-Balance` and `X-Ecash-Kid` to a response. */
   withPaymentHeaders(res: Response, h: { key?: EcashKey; kid: string; balanceSats: number }): Response;
   /** Turns any error into the shared JSON error response (status, Retry-After, X-Cashu when paying would fix it). */

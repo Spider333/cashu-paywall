@@ -19,7 +19,14 @@ export async function balance(ctx: Ctx, key: EcashKey): Promise<BalanceInfo> {
   const row = await getKeyRow(ctx, keyHash);
   if (!row) throw new PaywallError("ECASH_KEY_INVALID");
   if (row.status === "frozen") throw new PaywallError("ECASH_KEY_FROZEN");
-  return { kid: row.kid, balanceSats: row.balance, mint: row.mint_url, calls: row.calls, createdAt: row.created_at, lastUsedAt: row.last_used_at };
+  return {
+    kid: row.kid,
+    balanceSats: row.balance,
+    mint: row.mint_url,
+    calls: row.calls,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
+  };
 }
 
 /** A new 0-credit key. The key itself is returned once and never stored. */

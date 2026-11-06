@@ -1,12 +1,24 @@
 /** Every error code the library returns. Each maps to one HTTP status (see docs/nut-24.md). */
 export type PaywallErrorCode =
-  | "ECASH_TOKEN_INVALID" | "ECASH_MINT_NOT_ALLOWED" | "ECASH_UNIT_NOT_ALLOWED"
-  | "ECASH_AMOUNT_TOO_LOW" | "ECASH_AMOUNT_TOO_HIGH" | "ECASH_BALANCE_CAP"
-  | "ECASH_TOKEN_SPENT" | "ECASH_TOKEN_LOCKED" | "ECASH_MINT_MISMATCH"
-  | "ECASH_INSUFFICIENT_BALANCE" | "ECASH_PAYMENT_REQUIRED"
-  | "ECASH_KEY_INVALID" | "ECASH_KEY_FROZEN" | "ECASH_NOTHING_TO_REFUND"
-  | "ECASH_RATE_LIMITED" | "ECASH_MINT_UNAVAILABLE" | "ECASH_PENDING"
-  | "ECASH_POT_FULL" | "ECASH_INTERNAL";
+  | "ECASH_TOKEN_INVALID"
+  | "ECASH_MINT_NOT_ALLOWED"
+  | "ECASH_UNIT_NOT_ALLOWED"
+  | "ECASH_AMOUNT_TOO_LOW"
+  | "ECASH_AMOUNT_TOO_HIGH"
+  | "ECASH_BALANCE_CAP"
+  | "ECASH_TOKEN_SPENT"
+  | "ECASH_TOKEN_LOCKED"
+  | "ECASH_MINT_MISMATCH"
+  | "ECASH_INSUFFICIENT_BALANCE"
+  | "ECASH_PAYMENT_REQUIRED"
+  | "ECASH_KEY_INVALID"
+  | "ECASH_KEY_FROZEN"
+  | "ECASH_NOTHING_TO_REFUND"
+  | "ECASH_RATE_LIMITED"
+  | "ECASH_MINT_UNAVAILABLE"
+  | "ECASH_PENDING"
+  | "ECASH_POT_FULL"
+  | "ECASH_INTERNAL";
 
 /** HTTP status, retry flag and default message per code. */
 const TABLE: Record<PaywallErrorCode, [number, boolean, string]> = {
@@ -27,7 +39,11 @@ const TABLE: Record<PaywallErrorCode, [number, boolean, string]> = {
   ECASH_RATE_LIMITED: [429, true, "Too many requests. Try again shortly."],
   ECASH_INTERNAL: [500, true, "Internal error."],
   ECASH_MINT_UNAVAILABLE: [503, true, "The mint can't be reached right now. Your token was not spent; try again."],
-  ECASH_PENDING: [503, true, "Received; the outcome is not final yet. It settles within 15 minutes, retry with the same token or check your balance."],
+  ECASH_PENDING: [
+    503,
+    true,
+    "Received; the outcome is not final yet. It settles within 15 minutes, retry with the same token or check your balance.",
+  ],
   ECASH_POT_FULL: [503, true, "This server holds as much ecash as it is allowed to. Try again after its next payout."],
 };
 

@@ -6,8 +6,16 @@ import type { Ctx } from "../core/context.js";
 import { settleLightningOp } from "../core/lightning.js";
 import { errorFields } from "../core/redact.js";
 import {
-  COUNTER_BLOCK, creditBatch, failOp, failRefundAndGiveBack, opDetail, releaseProofs, sealProofStmts, settleReservedByState,
-  sumSats, type OpRow,
+  COUNTER_BLOCK,
+  creditBatch,
+  failOp,
+  failRefundAndGiveBack,
+  opDetail,
+  releaseProofs,
+  sealProofStmts,
+  settleReservedByState,
+  sumSats,
+  type OpRow,
 } from "../core/store.js";
 import { getWallet } from "../core/wallet.js";
 
@@ -31,7 +39,10 @@ export async function recoverStuckOps(ctx: Ctx): Promise<number> {
     if (done) recovered++;
     else {
       // Not final yet: move it to the back of the queue so 20 stuck ops can't starve the rest.
-      await ctx.db.prepare("UPDATE ecash_ops SET updated_at = ?2 WHERE op_id = ?1 AND status = 'pending'").bind(op.op_id, ctx.now()).run();
+      await ctx.db
+        .prepare("UPDATE ecash_ops SET updated_at = ?2 WHERE op_id = ?1 AND status = 'pending'")
+        .bind(op.op_id, ctx.now())
+        .run();
     }
   }
   return recovered;
@@ -40,7 +51,9 @@ export async function recoverStuckOps(ctx: Ctx): Promise<number> {
 /** Rebuilds the op's outputs from the seed (NUT-09) and keeps those still unspent at the mint. */
 async function restoreOutputs(ctx: Ctx, op: OpRow) {
   const wallet = await getWallet(ctx, op.mint_url);
-  const r = await wallet.restore(op.counter_start!, op.counter_count ?? COUNTER_BLOCK, { keysetId: op.keyset_id ?? undefined });
+  const r = await wallet.restore(op.counter_start!, op.counter_count ?? COUNTER_BLOCK, {
+    keysetId: op.keyset_id ?? undefined,
+  });
   if (r.proofs.length === 0) return r.proofs;
   const states = await wallet.checkProofsStates(r.proofs);
   return r.proofs.filter((_, i) => states[i]?.state === CheckStateEnum.UNSPENT);
@@ -91,8 +104,16 @@ async function recoverOp(ctx: Ctx, op: OpRow): Promise<boolean> {
         const proofs = await restoreOutputs(ctx, op);
         await ctx.db.batch(await sealProofStmts(ctx, op.mint_url, proofs, op.op_id));
       }
-      const gaveBack = await failRefundAndGiveBack(ctx, op, settled.anySpent ? "recovered_restored" : "recovered_unspent");
-      ctx.log.info("ecash_recovered", { op_id: op.op_id, kind: op.kind, outcome: gaveBack ? "given_back" : "already_settled" });
+      const gaveBack = await failRefundAndGiveBack(
+        ctx,
+        op,
+        settled.anySpent ? "recovered_restored" : "recovered_unspent",
+      );
+      ctx.log.info("ecash_recovered", {
+        op_id: op.op_id,
+        kind: op.kind,
+        outcome: gaveBack ? "given_back" : "already_settled",
+      });
       return true;
     }
     case "melt": {

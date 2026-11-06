@@ -13,10 +13,12 @@ beforeAll(async () => {
   await faucet.load();
   for (const m of ["log", "info", "warn", "error", "debug"] as const) {
     const orig = console[m].bind(console);
-    spies.push(vi.spyOn(console, m).mockImplementation((...args: unknown[]) => {
-      captured.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
-      orig(...args);
-    }));
+    spies.push(
+      vi.spyOn(console, m).mockImplementation((...args: unknown[]) => {
+        captured.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
+        orig(...args);
+      }),
+    );
   }
 });
 afterAll(() => spies.forEach((s) => s.mockRestore()));
@@ -36,14 +38,29 @@ describe("T-LOG-1 no secrets in logs", () => {
     const lnurl: typeof fetch = async (input, init) => {
       const url = new URL(String(input instanceof Request ? input.url : input));
       if (url.host !== "ln.example") return fetch(input, init);
-      if (url.pathname.startsWith("/.well-known/lnurlp/")) return Response.json({ tag: "payRequest", callback: "https://ln.example/cb", minSendable: 1000, maxSendable: 1e9, metadata: "[]" });
+      if (url.pathname.startsWith("/.well-known/lnurlp/"))
+        return Response.json({
+          tag: "payRequest",
+          callback: "https://ln.example/cb",
+          minSendable: 1000,
+          maxSendable: 1e9,
+          metadata: "[]",
+        });
       const q = await issuer.createMintQuoteBolt11(Number(url.searchParams.get("amount")) / 1000);
       return Response.json({ pr: q.request });
     };
     // No `logger` passed: the library's default console logger (with redaction) is what we inspect.
     const pw = createPaywall({
-      db: env.DB_LOG, keyPepper: TEST_CFG.keyPepper, proofKey: TEST_CFG.proofKey, walletSeed: Array.from(crypto.getRandomValues(new Uint8Array(64)), (b) => b.toString(16).padStart(2, "0")).join(""),
-      mints: [TESTNUT], publicBaseUrl: "https://paywall.test", priceSats: 5, fetch: lnurl,
+      db: env.DB_LOG,
+      keyPepper: TEST_CFG.keyPepper,
+      proofKey: TEST_CFG.proofKey,
+      walletSeed: Array.from(crypto.getRandomValues(new Uint8Array(64)), (b) => b.toString(16).padStart(2, "0")).join(
+        "",
+      ),
+      mints: [TESTNUT],
+      publicBaseUrl: "https://paywall.test",
+      priceSats: 5,
+      fetch: lnurl,
       melt: { lightningAddress: "demo@ln.example", minSats: 1000, keepSats: 100 },
     });
     const guarded = pw.protect(async () => Response.json({ ok: true }), { priceSats: 5 });
@@ -59,7 +76,9 @@ describe("T-LOG-1 no secrets in logs", () => {
     expect((await get({ "X-Cashu": "cashuBgarbagegarbagegarbage" })).status).toBe(400);
     expect((await get({ Authorization: "Bearer eck_" + "x".repeat(43) })).status).toBe(401);
 
-    const refund = await pw.handleRoutes(new Request("https://paywall.test/ecash/refund", { method: "POST", headers: { Authorization: `Bearer ${key}` } }));
+    const refund = await pw.handleRoutes(
+      new Request("https://paywall.test/ecash/refund", { method: "POST", headers: { Authorization: `Bearer ${key}` } }),
+    );
     expect(refund!.status).toBe(200);
 
     const ln = await pw.startLightningTopup(1500);

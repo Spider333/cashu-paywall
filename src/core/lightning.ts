@@ -7,8 +7,21 @@ import { PaywallError } from "./errors.js";
 import { hashKey, newKey, type EcashKey } from "./keys.js";
 import { errorFields } from "./redact.js";
 import {
-  COUNTER_BLOCK, D1CounterSource, bindKeyToMint, creditBatch, failOp, getKeyRow, getOp, insertKeyStmt, insertOpStmt, newOpId, opDetail,
-  sats, sumSats, totalHeld, type OpRow,
+  COUNTER_BLOCK,
+  D1CounterSource,
+  bindKeyToMint,
+  creditBatch,
+  failOp,
+  getKeyRow,
+  getOp,
+  insertKeyStmt,
+  insertOpStmt,
+  newOpId,
+  opDetail,
+  sats,
+  sumSats,
+  totalHeld,
+  type OpRow,
 } from "./store.js";
 import { requireKey } from "./topup.js";
 import { NUT_QUOTE_ISSUED, getWallet, isCounterReuse, nut20Key, skipCounterAhead } from "./wallet.js";
@@ -27,14 +40,14 @@ export interface LightningTopup {
 
 /** State of a Lightning top-up. `CREDITED` is final; `EXPIRED` means the invoice was never paid. */
 export type LightningTopupStatus =
-  | { state: "UNPAID" | "EXPIRED"; opId: string }
-  | { state: "CREDITED"; opId: string; kid: string; balanceSats: number };
+  { state: "UNPAID" | "EXPIRED"; opId: string } | { state: "CREDITED"; opId: string; kid: string; balanceSats: number };
 
 export async function startLightningTopup(ctx: Ctx, amountSats: number, key?: EcashKey): Promise<LightningTopup> {
   if (!Number.isSafeInteger(amountSats) || amountSats < ctx.limits.minTopupSats) {
     throw new PaywallError("ECASH_AMOUNT_TOO_LOW", { details: { min_topup_sats: ctx.limits.minTopupSats } });
   }
-  if (amountSats > ctx.limits.maxTopupSats) throw new PaywallError("ECASH_AMOUNT_TOO_HIGH", { details: { max_topup_sats: ctx.limits.maxTopupSats } });
+  if (amountSats > ctx.limits.maxTopupSats)
+    throw new PaywallError("ECASH_AMOUNT_TOO_HIGH", { details: { max_topup_sats: ctx.limits.maxTopupSats } });
 
   let keyHash: string;
   let kid: string;
@@ -44,13 +57,16 @@ export async function startLightningTopup(ctx: Ctx, amountSats: number, key?: Ec
     const k = await requireKey(ctx, key);
     ({ kid } = k);
     keyHash = k.row.key_hash;
-    if (k.row.balance + amountSats > ctx.limits.maxBalanceSats) throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
+    if (k.row.balance + amountSats > ctx.limits.maxBalanceSats)
+      throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
     if (k.row.mint_url) {
-      if (!ctx.mints.includes(k.row.mint_url)) throw new PaywallError("ECASH_MINT_MISMATCH", { details: { key_mint: k.row.mint_url } });
+      if (!ctx.mints.includes(k.row.mint_url))
+        throw new PaywallError("ECASH_MINT_MISMATCH", { details: { key_mint: k.row.mint_url } });
       mintUrl = k.row.mint_url;
     }
   } else {
-    if (amountSats > ctx.limits.maxBalanceSats) throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
+    if (amountSats > ctx.limits.maxBalanceSats)
+      throw new PaywallError("ECASH_BALANCE_CAP", { details: { max_balance_sats: ctx.limits.maxBalanceSats } });
     created = newKey();
     ({ keyHash, kid } = await hashKey(ctx.cfg.keyPepper, created));
   }
@@ -72,8 +88,16 @@ export async function startLightningTopup(ctx: Ctx, amountSats: number, key?: Ec
   const opId = newOpId();
   const expiresAt = quote.expiry ? quote.expiry * 1000 : null;
   const opStmt = insertOpStmt(ctx, {
-    op_id: opId, kind: "topup_lightning", key_hash: keyHash, mint_url: mintUrl, input_id: quote.quote, amount: amountSats,
-    keyset_id: wallet.keysetId, counter_start: range.start, counter_count: range.count, detail: { locked, expires_at: expiresAt },
+    op_id: opId,
+    kind: "topup_lightning",
+    key_hash: keyHash,
+    mint_url: mintUrl,
+    input_id: quote.quote,
+    amount: amountSats,
+    keyset_id: wallet.keysetId,
+    counter_start: range.start,
+    counter_count: range.count,
+    detail: { locked, expires_at: expiresAt },
   });
   if (created) await ctx.db.batch([insertKeyStmt(ctx, keyHash, kid, mintUrl), opStmt]);
   else {
@@ -84,7 +108,12 @@ export async function startLightningTopup(ctx: Ctx, amountSats: number, key?: Ec
   }
   ctx.log.info("ecash_ln_quote", { kid, op_id: opId, mint_host: hostOf(mintUrl), amount: amountSats });
   return {
-    opId, ...(created ? { key: created } : {}), kid, invoice: quote.request, amountSats, expiresAt,
+    opId,
+    ...(created ? { key: created } : {}),
+    kid,
+    invoice: quote.request,
+    amountSats,
+    expiresAt,
     statusUrl: `${topupUrl(ctx)}/lightning/${opId}`,
   };
 }
@@ -118,7 +147,8 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
     ctx.log.warn("ecash_ln_check_failed", { op_id: op.op_id, ...errorFields(e) });
     throw new PaywallError("ECASH_MINT_UNAVAILABLE");
   }
-  const paid = quote.amount_paid !== undefined ? sats(quote.amount_paid) >= op.amount : quote.state !== MintQuoteState.UNPAID;
+  const paid =
+    quote.amount_paid !== undefined ? sats(quote.amount_paid) >= op.amount : quote.state !== MintQuoteState.UNPAID;
   if (!paid) {
     const exp = opDetail(op).expires_at;
     if (typeof exp === "number" && ctx.now() > exp) {
@@ -127,20 +157,31 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
     }
     return { state: "UNPAID", opId: op.op_id };
   }
-  const issued = quote.amount_issued !== undefined ? sats(quote.amount_issued) >= op.amount : quote.state === MintQuoteState.ISSUED;
+  const issued =
+    quote.amount_issued !== undefined ? sats(quote.amount_issued) >= op.amount : quote.state === MintQuoteState.ISSUED;
   const locked = opDetail(op).locked === true;
   let proofs: Proof[] | undefined;
   if (!issued) {
     try {
-      proofs = await wallet.mintProofsBolt11(op.amount, quote, {
-        keysetId: op.keyset_id ?? undefined, ...(locked ? { privkey: (await nut20Key(ctx)).privkey } : {}),
-      }, { type: "deterministic", counter: op.counter_start! });
+      proofs = await wallet.mintProofsBolt11(
+        op.amount,
+        quote,
+        {
+          keysetId: op.keyset_id ?? undefined,
+          ...(locked ? { privkey: (await nut20Key(ctx)).privkey } : {}),
+        },
+        { type: "deterministic", counter: op.counter_start! },
+      );
     } catch (e) {
       if (isCounterReuse(e)) {
         // Either our counter went backwards, or a racing poll already minted with these outputs. Ask the quote first:
         // if it was issued, the restore below finds the proofs in this same range.
         const again = await wallet.checkMintQuoteBolt11(op.input_id!).catch(() => null);
-        const nowIssued = again && (again.amount_issued !== undefined ? sats(again.amount_issued) >= op.amount : again.state === MintQuoteState.ISSUED);
+        const nowIssued =
+          again &&
+          (again.amount_issued !== undefined
+            ? sats(again.amount_issued) >= op.amount
+            : again.state === MintQuoteState.ISSUED);
         if (!nowIssued) {
           // Nothing issued: skip the counter ahead and give this op a fresh block. The old range is kept in detail so a
           // restore still looks there too.
@@ -168,7 +209,10 @@ export async function settleLightningOp(ctx: Ctx, op: OpRow): Promise<LightningT
     // Already issued (a crash after minting, or a racing poll): rebuild our outputs from the seed (NUT-09), in the
     // op's current counter range and any earlier ones.
     const prev = (opDetail(op).prev_ranges as Array<[number, number]> | undefined) ?? [];
-    for (const [start, count] of [[op.counter_start!, op.counter_count ?? COUNTER_BLOCK] as [number, number], ...prev]) {
+    for (const [start, count] of [
+      [op.counter_start!, op.counter_count ?? COUNTER_BLOCK] as [number, number],
+      ...prev,
+    ]) {
       const r = await wallet.restore(start, count, { keysetId: op.keyset_id ?? undefined });
       if (r.proofs.length > 0) {
         proofs = r.proofs;

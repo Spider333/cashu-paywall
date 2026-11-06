@@ -15,7 +15,8 @@ beforeAll(async () => {
 });
 
 async function wipe(db: D1Database) {
-  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_mint_cache"]) await db.prepare(`DELETE FROM ${t}`).run();
+  for (const t of ["ecash_keys", "ecash_proofs", "ecash_ops", "ecash_mint_cache"])
+    await db.prepare(`DELETE FROM ${t}`).run();
 }
 
 /** LNURL-pay stub for demo@ln.example: invoices come from fresh testnut mint quotes (so testnut settles internally). */
@@ -26,7 +27,13 @@ function lnurlStub(opts: { skew?: number } = {}) {
     const url = new URL(String(input instanceof Request ? input.url : input));
     if (url.host === "ln.example") {
       if (url.pathname === "/.well-known/lnurlp/demo") {
-        return Response.json({ tag: "payRequest", callback: "https://ln.example/cb", minSendable: 1000, maxSendable: 100_000_000, metadata: "[]" });
+        return Response.json({
+          tag: "payRequest",
+          callback: "https://ln.example/cb",
+          minSendable: 1000,
+          maxSendable: 100_000_000,
+          metadata: "[]",
+        });
       }
       if (url.pathname === "/cb") {
         await issuer.loadMint();
@@ -64,7 +71,10 @@ describe("melt", () => {
 
   it("T-MELT-1: pot 3,000, owed 0, keep 500, min 2,000 -> melts <= 2,500 and pays the invoice", async () => {
     const stub = lnurlStub();
-    const { pw, key, left, pot } = await potOf3000({ fetch: stub.fetch, melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 } });
+    const { pw, key, left, pot } = await potOf3000({
+      fetch: stub.fetch,
+      melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 },
+    });
     expect((await pw.debit(key, left)).ok).toBe(true);
     const r = await pw.scheduled(DAILY);
     expect(r.invariantOk).toBe(true);
@@ -72,7 +82,10 @@ describe("melt", () => {
     expect(r.melted.length).toBe(1);
     expect(r.melted[0]!.amountSats).toBeLessThanOrEqual(2500);
     expect(r.melted[0]!.amountSats).toBeGreaterThanOrEqual(2000);
-    const op = await db().prepare("SELECT * FROM ecash_ops WHERE op_id = ?").bind(r.melted[0]!.opId).first<{ status: string; detail: string; kind: string }>();
+    const op = await db()
+      .prepare("SELECT * FROM ecash_ops WHERE op_id = ?")
+      .bind(r.melted[0]!.opId)
+      .first<{ status: string; detail: string; kind: string }>();
     expect(op!.kind).toBe("melt");
     expect(op!.status).toBe("done");
     const detail = JSON.parse(op!.detail);
@@ -82,7 +95,9 @@ describe("melt", () => {
     const q = await stub.issuer.checkMintQuoteBolt11(stub.quotes.at(-1)!);
     expect([MintQuoteState.PAID, MintQuoteState.ISSUED]).toContain(q.state);
     // What is left in the pot still covers what is owed (0) and is above the keep buffer minus fees.
-    const held = await db().prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'").first<{ s: number }>();
+    const held = await db()
+      .prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'")
+      .first<{ s: number }>();
     expect(held!.s).toBeGreaterThan(0);
     expect(held!.s).toBeLessThanOrEqual(1000);
     // Review #1: nothing vanished. D1's pot matches the mint and equals pot before - melted - fees.
@@ -95,15 +110,25 @@ describe("melt", () => {
   it("T-MELT-3: the LNURL server returns an invoice for a different amount -> aborted, logged, no melt", async () => {
     const stub = lnurlStub({ skew: 1 });
     const cap = capture();
-    const { pw, key, left } = await potOf3000({ fetch: stub.fetch, logger: cap.logger, melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 } });
+    const { pw, key, left } = await potOf3000({
+      fetch: stub.fetch,
+      logger: cap.logger,
+      melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 },
+    });
     expect((await pw.debit(key, left)).ok).toBe(true);
     const r = await pw.scheduled(DAILY);
     expect(r.melted).toEqual([]);
     expect(r.skipped).toEqual([{ mint: "https://testnut.cashu.space", reason: "invoice_amount_mismatch" }]);
-    expect(cap.lines.some(([l, e, f]) => l === "error" && e === "ecash_melt_aborted" && f.reason === "invoice_amount_mismatch")).toBe(true);
+    expect(
+      cap.lines.some(
+        ([l, e, f]) => l === "error" && e === "ecash_melt_aborted" && f.reason === "invoice_amount_mismatch",
+      ),
+    ).toBe(true);
     const ops = await db().prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE kind = 'melt'").first<{ n: number }>();
     expect(ops!.n).toBe(0);
-    const reserved = await db().prepare("SELECT COUNT(*) AS n FROM ecash_proofs WHERE state != 'unspent'").first<{ n: number }>();
+    const reserved = await db()
+      .prepare("SELECT COUNT(*) AS n FROM ecash_proofs WHERE state != 'unspent'")
+      .first<{ n: number }>();
     expect(reserved!.n).toBe(0);
   });
 });
@@ -121,7 +146,9 @@ describe("recovery", () => {
     const t = await faucet.token(50);
     const fee = faucet.feeFor(t);
     await expect(pwCrash.topupWithToken(t, key)).rejects.toThrow(/simulated crash/);
-    const op = await db().prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token'").first<{ status: string }>();
+    const op = await db()
+      .prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token'")
+      .first<{ status: string }>();
     expect(op!.status).toBe("pending");
     expect((await keyRow(db(), key))!.balance).toBe(0);
     // Not yet 15 minutes: recovery leaves it alone.
@@ -131,7 +158,9 @@ describe("recovery", () => {
     expect(r.recovered).toBe(1);
     expect(r.invariantOk).toBe(true);
     expect((await keyRow(db(), key))!.balance).toBe(50 - fee);
-    const pot = await db().prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'").first<{ s: number }>();
+    const pot = await db()
+      .prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'")
+      .first<{ s: number }>();
     expect(pot!.s).toBe(50 - fee);
     // A second run doesn't credit again.
     expect((await later.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() })).recovered).toBe(0);
@@ -147,7 +176,9 @@ describe("recovery", () => {
     await expect(pwCrash.topupWithToken(t)).rejects.toThrow(/simulated crash/);
     const later = makePaywall(db(), { now: LATER });
     expect((await later.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() })).recovered).toBe(1);
-    const op = await db().prepare("SELECT status, input_id FROM ecash_ops WHERE kind = 'topup_token'").first<{ status: string; input_id: string | null }>();
+    const op = await db()
+      .prepare("SELECT status, input_id FROM ecash_ops WHERE kind = 'topup_token'")
+      .first<{ status: string; input_id: string | null }>();
     expect(op!.status).toBe("failed");
     expect(op!.input_id).toBeNull(); // the owner may submit it again
     const states = await faucet.wallet.checkProofsStates(faucet.wallet.decodeToken(t).proofs);
@@ -170,7 +201,9 @@ describe("recovery", () => {
     expect(r.recovered).toBe(1);
     expect(r.invariantOk).toBe(true);
     expect((await keyRow(db(), top.key!))!.balance).toBe(B);
-    const pot = await db().prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'").first<{ s: number }>();
+    const pot = await db()
+      .prepare("SELECT COALESCE(SUM(amount),0) AS s FROM ecash_proofs WHERE state = 'unspent'")
+      .first<{ s: number }>();
     expect(pot!.s).toBeGreaterThanOrEqual(B); // 88 in, minus the refund swap's fee
     expect(pot!.s).toBeLessThan(88);
     // The user can refund again, for real this time.
@@ -196,10 +229,17 @@ describe("recovery", () => {
   it("a pending op whose mint is unreachable stays pending (retried next run)", async () => {
     const pwCrash = makePaywall(db(), { testHooks: { beforeSwap: crash } });
     await expect(pwCrash.topupWithToken(await faucet.token(5))).rejects.toThrow();
-    const down = makePaywall(db(), { now: LATER, fetch: async () => { throw new TypeError("down"); } });
+    const down = makePaywall(db(), {
+      now: LATER,
+      fetch: async () => {
+        throw new TypeError("down");
+      },
+    });
     await db().prepare("DELETE FROM ecash_mint_cache").run();
     expect((await down.scheduled({ cron: "*/10 * * * *", scheduledTime: Date.now() })).recovered).toBe(0);
-    const op = await db().prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token'").first<{ status: string }>();
+    const op = await db()
+      .prepare("SELECT status FROM ecash_ops WHERE kind = 'topup_token'")
+      .first<{ status: string }>();
     expect(op!.status).toBe("pending");
     expect(PaywallError).toBeTruthy();
   });
