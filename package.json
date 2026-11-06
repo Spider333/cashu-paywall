@@ -1,0 +1,103 @@
+{
+  "name": "cashu-paywall",
+  "version": "0.1.0",
+  "description": "Charge per call in Cashu ecash: prepaid eck_ keys, NUT-24 HTTP 402 and an MCP adapter for Cloudflare Workers",
+  "license": "MIT",
+  "author": "David Stancel",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Spider333/cashu-paywall.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Spider333/cashu-paywall/issues"
+  },
+  "homepage": "https://github.com/Spider333/cashu-paywall#readme",
+  "keywords": [
+    "cashu",
+    "ecash",
+    "nut-24",
+    "http-402",
+    "mcp",
+    "cloudflare-workers",
+    "d1",
+    "paywall",
+    "lightning",
+    "nut-18",
+    "micropayments",
+    "ai-agents"
+  ],
+  "engines": {
+    "node": ">=22.4.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./migrations/0001_init.sql": "./migrations/0001_init.sql",
+    "./sql/drop-all.sql": "./sql/drop-all.sql",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "sql",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "workspaces": [
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run gen && rm -rf dist && tsc -p tsconfig.json",
+    "gen": "node scripts/gen-migrations.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:testnut": "TESTNUT=1 vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "demo:token": "node scripts/testnut-token.mjs",
+    "demo:check": "node scripts/demo-check.mjs",
+    "bench:cpu": "node bench/cpu.mjs",
+    "bench:bundle": "node bench/bundle.mjs",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "4.13.0",
+    "uqr": "0.1.3"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "@cloudflare/workers-types": "5.20261104.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.1",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.12",
+    "wrangler": "4.158.0",
+    "zod": "4.6.7"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  // cashu-paywall demo Worker. Local dev needs no Cloudflare account:
+  //   npx wrangler d1 migrations apply cashu-paywall-demo --local && npx wrangler dev
+  "name": "cashu-paywall-demo",
+  "main": "src/index.ts",
+  // 2026-08-22: newest date the workerd in @cloudflare/vitest-pool-workers 0.23 supports (tests and dev stay identical).
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "ECASH_DB",
+      "database_name": "cashu-paywall-demo",
+      // Placeholder: replace with the id from `wrangler d1 create cashu-paywall-demo` before you deploy. Local dev ignores it.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../migrations",
+    },
+  ],
+  // Daily melt + cleanup at 03:00 UTC; recovery every 10 minutes.
+  "triggers": { "crons": ["0 3 * * *", "*/10 * * * *"] },
+  "ratelimits": [{ "name": "ECASH_RL", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
+  "vars": {
+    "ECASH_MINTS": "https://testnut.cashu.space",
+    "ECASH_PRICE_SATS": "5",
+    "ECASH_PUBLIC_URL": "http://localhost:8787",
+    "ECASH_MELT_MIN_SATS": "2000",
+    "ECASH_MAX_BALANCE_SATS": "5000",
+    "ECASH_MAX_TOTAL_HELD_SATS": "20000",
+    // ECASH_MELT_LN_ADDRESS is NOT set on purpose: melting stays off until the operator names an address.
+  },
+  // Secrets (never in this file): ECASH_KEY_PEPPER, ECASH_PROOF_KEY, ECASH_WALLET_SEED.
+  // Local: `npm run dev-vars` writes fresh ones to .dev.vars (gitignored).
+}
