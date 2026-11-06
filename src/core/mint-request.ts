@@ -1,8 +1,8 @@
 import { JSONInt, MintOperationError, NetworkError, HttpResponseError } from "@cashu/cashu-ts";
 import type { RequestFn, RequestOptions } from "@cashu/cashu-ts";
 
-/** Default per-request timeout for mint calls, in ms. */
-export const MINT_TIMEOUT_MS = 15_000;
+/** Per-request timeout for mint calls, in ms. */
+const MINT_TIMEOUT_MS = 15_000;
 
 /**
  * A cashu-ts RequestFn built on an injectable `fetch`.

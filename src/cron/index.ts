@@ -4,6 +4,7 @@ import { potByMint } from "../core/store.js";
 import { meltMint } from "./melt.js";
 import { recoverStuckOps } from "./recovery.js";
 
+/** What one cron run did. `invariantOk: false` means the pot is short of what keys are owed; melts were skipped. */
 export interface CronReport {
   recovered: number;
   melted: Array<{ mint: string; amountSats: number; feeSats: number; opId: string }>;
@@ -13,7 +14,7 @@ export interface CronReport {
 }
 
 /** The daily job (melt + cleanup). Any other cron string runs recovery and the invariant check only. */
-export const DAILY_CRON = "0 3 * * *";
+const DAILY_CRON = "0 3 * * *";
 const EMPTY_KEY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function runScheduled(ctx: Ctx, controller: { cron: string; scheduledTime: number }): Promise<CronReport> {

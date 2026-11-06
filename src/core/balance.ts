@@ -3,6 +3,7 @@ import { PaywallError } from "./errors.js";
 import { hashKey, isEcashKey, newKey, type EcashKey } from "./keys.js";
 import { getKeyRow, insertKeyStmt } from "./store.js";
 
+/** A key's credit and usage, as returned by `Paywall.balance`. Times are Unix ms. */
 export interface BalanceInfo {
   kid: string;
   balanceSats: number;

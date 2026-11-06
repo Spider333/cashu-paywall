@@ -1,4 +1,4 @@
-// Lightning top-up (PRD 6.5 D): a NUT-04 mint quote, NUT-20 locked when the mint supports it. The quote id never
+// Lightning top-up: a NUT-04 mint quote, NUT-20 locked when the mint supports it. The quote id never
 // leaves the server: the browser only sees our op id.
 import { MintQuoteState, isMintOperationError, type Proof } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
@@ -13,6 +13,7 @@ import {
 import { requireKey } from "./topup.js";
 import { NUT_QUOTE_ISSUED, getWallet, isCounterReuse, nut20Key, skipCounterAhead } from "./wallet.js";
 
+/** A started Lightning top-up. `key` is present only when it created the key; the key activates when the invoice is paid. */
 export interface LightningTopup {
   opId: string;
   key?: EcashKey;
@@ -24,6 +25,7 @@ export interface LightningTopup {
   statusUrl: string;
 }
 
+/** State of a Lightning top-up. `CREDITED` is final; `EXPIRED` means the invoice was never paid. */
 export type LightningTopupStatus =
   | { state: "UNPAID" | "EXPIRED"; opId: string }
   | { state: "CREDITED"; opId: string; kid: string; balanceSats: number };

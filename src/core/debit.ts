@@ -3,8 +3,9 @@ import { PaywallError } from "./errors.js";
 import { hashKey, isEcashKey, type EcashKey } from "./keys.js";
 import { paymentRequest } from "./requests.js";
 import { rateLimit } from "./ratelimit.js";
-import { debitStmt, getKeyRow } from "./store.js";
+import { atomicDebit, getKeyRow } from "./store.js";
 
+/** Result of `Paywall.debit`. A failed debit returns the error instead of throwing, so a hot path needs no try/catch. */
 export type DebitResult =
   | { ok: true; balanceSats: number; kid: string }
   | { ok: false; error: PaywallError };
@@ -13,13 +14,13 @@ function positiveInt(n: number, what: string): void {
   if (!Number.isSafeInteger(n) || n <= 0) throw new Error(`cashu-paywall: ${what} must be a positive integer`);
 }
 
-/** One atomic statement per paid call (PRD 6.3). Never touches the mint. */
+/** One atomic statement per paid call. Never touches the mint. */
 export async function debit(ctx: Ctx, key: EcashKey, amountSats: number): Promise<DebitResult> {
   positiveInt(amountSats, "debit amount");
   if (!isEcashKey(key)) return { ok: false, error: new PaywallError("ECASH_KEY_INVALID") };
   const { keyHash, kid } = await hashKey(ctx.cfg.keyPepper, key);
   if (!(await rateLimit(ctx, "call", kid))) return { ok: false, error: new PaywallError("ECASH_RATE_LIMITED") };
-  const r = await debitStmt(ctx, keyHash, amountSats);
+  const r = await atomicDebit(ctx, keyHash, amountSats);
   if (r.ok) {
     const balance = r.balance ?? (await getKeyRow(ctx, keyHash))?.balance ?? 0;
     return { ok: true, balanceSats: balance, kid };

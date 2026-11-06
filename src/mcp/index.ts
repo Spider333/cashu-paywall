@@ -1,14 +1,16 @@
-// cashu-paywall/mcp: in-band ecash tools for an MCP server, and the per-call charge helpers (PRD 6.5 A).
+// cashu-paywall/mcp: in-band ecash tools for an MCP server, and the per-call charge helpers.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { PaywallError, errorBody, type EcashKey, type Paywall } from "../index.js";
 
+/** Options for `registerEcashTools`. */
 export interface EcashToolOptions {
   /** How the adapter finds the caller's key, e.g. a closure over the request's bearer key. */
   getKey: (extra: unknown) => EcashKey | null;
   /** Shown by ecash_balance and used for calls_left. */
   priceSats: number;
+  /** Prefix for the three tool names. Default `ecash_`. */
   toolNamePrefix?: string;
 }
 
@@ -125,7 +127,7 @@ export async function chargeToolCall(
   return { ok: false, result: text(body, true) };
 }
 
-/** Wrap a tool handler: debit, run, and credit the debit back on a thrown error matched by `refundOn` (PRD P1-5). */
+/** Wraps a tool handler: debit, run, and credit the debit back on a thrown error matched by `refundOn`. */
 export function withEcashCharge<A>(
   paywall: Paywall,
   opts: { getKey: (extra: unknown) => EcashKey | null; priceSats: number; refundOn?: (e: unknown) => boolean },

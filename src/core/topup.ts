@@ -1,11 +1,10 @@
-// The crash-safe token top-up (PRD 6.6): every mint call is recorded before it is made.
+// The crash-safe token top-up: every mint call is recorded in ecash_ops before it is made (docs/how-it-works.md).
 import { getTokenMetadata, isMintOperationError } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
 import { hostOf, normalizeMintUrl } from "./context.js";
 import { sha256Hex } from "./crypto.js";
 import { PaywallError } from "./errors.js";
 import { hashKey, isEcashKey, newKey, type EcashKey } from "./keys.js";
-import { paymentRequest } from "./requests.js";
 import { errorFields } from "./redact.js";
 import {
   COUNTER_BLOCK, D1CounterSource, bindKeyToMint, creditBatch, failOp, getKeyRow, getOpByInput, insertKeyStmt, insertOpStmt,
@@ -13,6 +12,7 @@ import {
 } from "./store.js";
 import { NUT_ALREADY_SPENT, getWallet, isCounterReuse, skipCounterAhead } from "./wallet.js";
 
+/** The outcome of a token top-up. `key` is present only when the top-up created the key: it is shown once. */
 export interface TopupResult {
   key?: EcashKey;
   kid: string;
@@ -189,9 +189,4 @@ function pendingError(created: EcashKey | undefined, kid: string): PaywallError 
   return new PaywallError("ECASH_PENDING", {
     details: { key: created, kid, warning: "Save this key now; it is shown once. Your credit lands on it within 15 minutes." },
   });
-}
-
-/** The payment request attached to errors that paying would fix. */
-export function topupRequest(ctx: Ctx): string {
-  return paymentRequest(ctx, ctx.suggestedTopupSats);
 }

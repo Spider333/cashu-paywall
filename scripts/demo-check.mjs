@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Runs the demo script (PRD 7.7) against a running demo and prints PASS/FAIL per step.
+// Runs the demo script (examples/demo-worker/README.md) against a running demo and prints PASS/FAIL per step.
 // Usage: node scripts/demo-check.mjs [http://localhost:8787]   (test sats only: tokens come from testnut)
 // Keys and tokens are shortened in the output; the refund token is claimed by a throwaway wallet to prove it is real.
 import { Wallet, MintQuoteState, getEncodedToken, decodePaymentRequest } from "@cashu/cashu-ts";
@@ -86,7 +86,7 @@ let claimed = 0;
 try { const w = new Wallet(MINT); await w.loadMint(); claimed = (await w.receive(ref.body.token)).reduce((s, p) => s + p.amount.toNumber(), 0); } catch { claimed = -1; }
 check("   the refund token is claimable by another wallet (Cashu.me stand-in)", claimed > 0, `claimed ${claimed} sats`);
 
-// 6. Lightning top-up page flow (E-1 without a browser)
+// 6. Lightning top-up page flow, without a browser
 const page = await fetch(`${DEMO}/ecash`);
 check("6. GET /ecash -> HTML with a CSP", page.status === 200 && /default-src 'none'/.test(page.headers.get("content-security-policy") ?? ""));
 const ln = await (await fetch(`${DEMO}/ecash/lightning`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount_sats: 500 }) })).json();

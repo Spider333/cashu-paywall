@@ -1,4 +1,4 @@
-// Logging rules (PRD 6.10): no token, key, payment request, invoice or secret ever reaches a log line.
+// No token, key, payment request, invoice or secret may reach a log line. Everything logged goes through redact().
 
 const PATTERNS: RegExp[] = [
   /cashu[AB][A-Za-z0-9_\-+/=]{16,}/g, // Cashu tokens (v3 cashuA, v4 cashuB)
@@ -15,6 +15,7 @@ export function redact(value: string): string {
   return out;
 }
 
+/** A structured logger: one event name plus fields per call. */
 export interface PaywallLogger {
   info(event: string, fields: Record<string, unknown>): void;
   warn(event: string, fields: Record<string, unknown>): void;

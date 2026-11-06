@@ -24,7 +24,7 @@ function indexJson(env: Env, paywall: Paywall) {
   };
 }
 
-/** JSON-RPC error codes on /mcp (PRD 6.9). */
+/** Errors on /mcp as JSON-RPC: -32001 unauthorized, -32002 rate limited, -32004 payment invalid. */
 function rpcError(paywall: Paywall, status: number, rpcCode: number, e: PaywallError): Response {
   const data = { ...errorBody(e, paywall.topupUrl), topup_url: paywall.topupUrl };
   return new Response(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: rpcCode, message: e.message, data } }), {
@@ -35,14 +35,14 @@ function rpcError(paywall: Paywall, status: number, rpcCode: number, e: PaywallE
 
 type Auth = { ok: true; key: EcashKey; headers: { key?: EcashKey; kid: string; balanceSats: number } | null } | { ok: false; response: Response };
 
-/** PRD 7.3 steps 1 to 3: find (or create via X-Cashu) the caller's key. */
+/** Finds the caller's key: a bearer key, or a new or topped-up one from an X-Cashu token. */
 async function mcpAuth(request: Request, paywall: Paywall): Promise<Auth> {
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? null;
   const hasCashu = request.headers.has("X-Cashu");
   if (!bearer && !hasCashu) {
     return { ok: false, response: rpcError(paywall, 401, -32001, new PaywallError("ECASH_KEY_INVALID", { message: "Send Authorization: Bearer eck_… or pay with an X-Cashu header." })) };
   }
-  // A malformed bearer is rejected before any D1 read (PRD 6.4).
+  // A malformed bearer is rejected before any D1 read.
   if (bearer && !paywall.isEcashKey(bearer)) return { ok: false, response: rpcError(paywall, 401, -32001, new PaywallError("ECASH_KEY_INVALID")) };
   if (hasCashu) {
     try {
@@ -99,6 +99,7 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // The report holds counts, mint URLs and op ids only, no secrets. Logging it lets an operator see each cron run.
     ctx.waitUntil(getPaywall(env).scheduled(controller).then((r) => console.log(JSON.stringify({ event: "ecash_cron_report", cron: controller.cron, ...r }))));
   },
 } satisfies ExportedHandler<Env>;

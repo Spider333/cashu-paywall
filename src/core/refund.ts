@@ -1,4 +1,4 @@
-// Refund (PRD 6.7): empty the key, hand back the balance minus the mint's swap fee as a fresh token.
+// Refund: empty the key, hand back the balance minus the mint's swap fee as a fresh token.
 import { getEncodedToken, isMintOperationError } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
 import { hostOf } from "./context.js";
@@ -14,6 +14,7 @@ import { getWallet, isCounterReuse, skipCounterAhead } from "./wallet.js";
 
 class CounterReused extends Error {}
 
+/** A finished refund. `token` is a Cashu token worth `amountSats`: it is money, so hand it to the key's owner only. */
 export interface RefundResult {
   token: string;
   amountSats: number;

@@ -1,4 +1,4 @@
-// basePath/* routes (PRD 6.5 D): page, lightning, topup, balance, refund, keys, info.
+// basePath/* routes: page, lightning, topup, balance, refund, keys, info.
 import type { Ctx } from "../core/context.js";
 import { balance, createKey } from "../core/balance.js";
 import { PaywallError } from "../core/errors.js";

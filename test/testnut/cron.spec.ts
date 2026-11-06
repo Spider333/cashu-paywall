@@ -90,7 +90,6 @@ describe("melt", () => {
     const { openRows } = await import("../helpers");
     expect(await potMatchesMint(db(), openRows)).toBe(held!.s);
     expect(held!.s).toBe(pot - r.melted[0]!.amountSats - r.melted[0]!.feeSats);
-    console.log(`[T-MELT-1] melted ${r.melted[0]!.amountSats} sats, fee ${r.melted[0]!.feeSats}, left ${held!.s}, preimage ${detail.preimage === null ? "null (testnut)" : "present"}`);
   });
 
   it("T-MELT-3: the LNURL server returns an invoice for a different amount -> aborted, logged, no melt", async () => {

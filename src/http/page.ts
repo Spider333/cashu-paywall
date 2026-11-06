@@ -1,4 +1,4 @@
-// The Lightning / token top-up page (PRD 6.5 D). Server-rendered, no framework, one inline script under a CSP nonce.
+// The Lightning / token top-up page. Server-rendered, no framework, one inline script under a CSP nonce.
 import { renderSVG } from "uqr";
 import type { Ctx } from "../core/context.js";
 import { hostOf, topupUrl } from "../core/context.js";

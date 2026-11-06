@@ -2,7 +2,7 @@ import type { Ctx } from "./context.js";
 import { hmacHex } from "./crypto.js";
 
 /**
- * Classes the library limits (PRD 6.8). With a single Cloudflare Rate Limiting binding every class shares its
+ * Classes the library limits. With a single Cloudflare Rate Limiting binding every class shares its
  * limit/period; the key is namespaced by class so they count separately.
  */
 export type RateClass = "topup" | "lightning" | "keys" | "badkey" | "call";

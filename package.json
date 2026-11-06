@@ -55,7 +55,10 @@
     "test": "vitest run",
     "test:testnut": "TESTNUT=1 vitest run",
     "demo:token": "node scripts/testnut-token.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "demo:check": "node scripts/demo-check.mjs",
+    "bench:cpu": "node bench/cpu.mjs",
+    "bench:bundle": "node bench/bundle.mjs"
   },
   "dependencies": {
     "@cashu/cashu-ts": "4.13.0",
@@ -78,6 +81,7 @@
     "@cloudflare/workers-types": "5.20261104.1",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@types/node": "22.20.5",
+    "esbuild": "0.28.1",
     "typescript": "5.9.3",
     "vite": "7.3.7",
     "vitest": "4.1.12",

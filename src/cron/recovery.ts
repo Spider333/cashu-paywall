@@ -1,4 +1,4 @@
-// Recovery job (PRD 6.6): finish or roll back any op left pending for more than 15 minutes.
+// Recovery job: finish or roll back any op left pending for more than 15 minutes.
 // Safe to run twice at once (the 03:00 daily cron and the */10 cron overlap): every settlement is guarded by a
 // conditional pending -> done/failed flip with a claim id, and proof updates are idempotent.
 import { CheckStateEnum, MeltQuoteState } from "@cashu/cashu-ts";
@@ -11,7 +11,7 @@ import {
 } from "../core/store.js";
 import { getWallet } from "../core/wallet.js";
 
-export const STUCK_AFTER_MS = 15 * 60 * 1000;
+const STUCK_AFTER_MS = 15 * 60 * 1000;
 /** An unpaid Lightning quote still pending after this long is given up (most mints expire quotes within an hour). */
 const LIGHTNING_GIVE_UP_MS = 24 * 60 * 60 * 1000;
 

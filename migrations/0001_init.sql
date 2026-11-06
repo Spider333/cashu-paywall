@@ -1,4 +1,4 @@
--- cashu-paywall schema v1 (PRD 1, section 6.3). D1 / SQLite. Forward-only: to roll back, drop the tables in a new migration.
+-- cashu-paywall schema v1. D1 / SQLite. Forward-only: to roll back, drop the tables in a new migration.
 
 -- Prepaid keys. Only the HMAC of the key is stored, never the key.
 CREATE TABLE ecash_keys (

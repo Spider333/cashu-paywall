@@ -30,7 +30,7 @@ export function base64urlDecode(s: string): Uint8Array {
   return out;
 }
 
-export function base64Decode(s: string): Uint8Array {
+function base64Decode(s: string): Uint8Array {
   return base64urlDecode(s.trim().replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
 }
 

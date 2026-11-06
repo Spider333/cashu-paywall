@@ -1,4 +1,4 @@
-// NUT-24 on plain HTTP routes (PRD 6.5 C): 402 + X-Cashu: creqA..., then serve on a retry that pays.
+// NUT-24 on plain HTTP routes: 402 + X-Cashu: creqA..., then serve on a retry that pays.
 import type { Ctx } from "../core/context.js";
 import { topupUrl } from "../core/context.js";
 import { credit, debit } from "../core/debit.js";
@@ -9,6 +9,7 @@ import { paymentRequest } from "../core/requests.js";
 import { topupWithToken } from "../core/topup.js";
 import { errorResponse, json } from "./json.js";
 
+/** A handler behind `protect()`. It runs after the debit; if it throws, the debit is credited back. */
 export type PaidHandler = (request: Request, paid: { kid: string; balanceSats: number }) => Promise<Response>;
 
 export interface PaymentHeaders {
@@ -17,7 +18,7 @@ export interface PaymentHeaders {
   balanceSats: number;
 }
 
-export function paymentRequiredResponse(ctx: Ctx, priceSats: number, description?: string, extra: Record<string, unknown> = {}): Response {
+function paymentRequiredResponse(ctx: Ctx, priceSats: number, description?: string, extra: Record<string, unknown> = {}): Response {
   const pr = paymentRequest(ctx, priceSats, { description });
   return json(
     {
@@ -55,7 +56,7 @@ export async function topupFromHeader(
 ): Promise<{ key: EcashKey; created?: EcashKey; kid: string; balanceSats: number } | null> {
   const token = request.headers.get("X-Cashu");
   if (token === null) return null;
-  // Huge header: reject before any decode work (PRD N-9).
+  // Huge header: reject before any decode work.
   if (token.length > ctx.limits.maxTokenChars) throw new PaywallError("ECASH_TOKEN_INVALID");
   const bearer = bearerFrom(request);
   if (bearer !== null && !isEcashKey(bearer)) throw new PaywallError("ECASH_KEY_INVALID");
@@ -88,7 +89,7 @@ export function protect(ctx: Ctx, handler: PaidHandler, opts: { priceSats: numbe
       const d = await debit(ctx, key, price);
       if (!d.ok) {
         if (d.error.code === "ECASH_INSUFFICIENT_BALANCE") {
-          // Same as no payment (PRD N-5), plus the balance so the client knows why.
+          // Answer like an unpaid request, plus the balance so the client knows why.
           const res = paymentRequiredResponse(ctx, price, opts.description, { balance_sats: d.error.details?.balance_sats ?? 0 });
           return created ? withPaymentHeaders(res, { key: created, kid: "", balanceSats: Number(d.error.details?.balance_sats ?? 0) }) : res;
         }

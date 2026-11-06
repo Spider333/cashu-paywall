@@ -128,7 +128,7 @@ describe("11.5 data and migration", () => {
     await ins("op-a").run();
     await expect(ins("op-b").run()).rejects.toThrow(/UNIQUE/);
   });
-  it("sql/0002_drop.sql drops every ecash_* table", async () => {
+  it("sql/drop-all.sql drops every ecash_* table", async () => {
     // Its own database, so the other tests keep their tables.
     const d = env.DB_REF;
     for (const s of env.ROLLBACK_SQL.split(";").map((x) => x.replace(/--.*$/gm, "").trim()).filter(Boolean)) await d.prepare(s).run();

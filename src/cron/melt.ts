@@ -1,4 +1,4 @@
-// Daily melt (PRD 6.7): move earned sats (held - owed - keep) to the operator's Lightning address via LNURL-pay.
+// Daily melt: move earned sats (held - owed - keep) to the operator's Lightning address via LNURL-pay.
 import { isMintOperationError, MeltQuoteState } from "@cashu/cashu-ts";
 import type { Ctx } from "../core/context.js";
 import { hostOf } from "../core/context.js";

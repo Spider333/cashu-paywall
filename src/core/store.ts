@@ -1,4 +1,4 @@
-// D1 statements (PRD 6.3). Every balance change is one conditional statement or one batch (a transaction).
+// D1 statements. Every balance change is one conditional statement or one batch (D1 runs a batch as a transaction).
 import type { CounterRange, CounterSource, Proof } from "@cashu/cashu-ts";
 import { JSONInt, deserializeProofs, hashToCurve } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
@@ -87,8 +87,8 @@ export async function bindKeyToMint(ctx: Ctx, keyHash: string, mintUrl: string):
   return getKeyRow(ctx, keyHash);
 }
 
-/** The atomic debit (PRD 6.3). `meta.changes === 1` is the success signal. */
-export async function debitStmt(ctx: Ctx, keyHash: string, amount: number): Promise<{ ok: boolean; balance: number | null }> {
+/** The atomic debit. `meta.changes === 1` is the success signal, so the logic holds even if RETURNING returns no row. */
+export async function atomicDebit(ctx: Ctx, keyHash: string, amount: number): Promise<{ ok: boolean; balance: number | null }> {
   const r = await ctx.db
     .prepare(
       `UPDATE ecash_keys
@@ -296,7 +296,7 @@ export function opDetail(op: OpRow): Record<string, unknown> {
 }
 
 /**
- * Credits a key for a finished money-in op, at most once (PRD 6.6 step 6): store the new proofs, mark the op done, add the
+ * Credits a key for a finished money-in op, at most once: store the new proofs, mark the op done, add the
  * credit. One D1 batch = one transaction. The key credit runs only if THIS batch flipped the op from pending to done
  * (a random claim id is written with it), so a second poll or a racing recovery can't credit twice.
  * Returns false if the op was already settled by someone else.

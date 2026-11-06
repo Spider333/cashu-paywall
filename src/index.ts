@@ -1,4 +1,3 @@
-// cashu-paywall: charge per call in Cashu ecash on Cloudflare Workers (prepaid eck_ keys, X-Cashu, NUT-24 402, Lightning top-up).
 import { balance, createKey, type BalanceInfo } from "./core/balance.js";
 import { buildCtx, type Ctx, type PaywallConfig, type RateLimiter } from "./core/context.js";
 import { credit, debit, type DebitResult } from "./core/debit.js";
@@ -21,20 +20,44 @@ export type {
   CronReport, PaidHandler,
 };
 
+/** A paywall bound to one D1 database and config. Every method is safe to call from a Worker's fetch or scheduled handler. */
 export interface Paywall {
+  /** The config this paywall was created with. */
   readonly config: Readonly<PaywallConfig>;
+  /** True only for a well-formed `eck_` key. Never reads the database. */
   isEcashKey(value: string | null | undefined): value is EcashKey;
+  /** Creates a key with 0 credit. The key is returned once and never stored, only its HMAC. */
   createKey(): Promise<{ key: EcashKey; kid: string }>;
+  /** The key's credit and usage. Throws `ECASH_KEY_INVALID` or `ECASH_KEY_FROZEN`. */
   balance(key: EcashKey): Promise<BalanceInfo>;
+  /**
+   * Swaps a Cashu token at its mint and credits its value minus the swap fee to `key`, or to a new key when `key` is
+   * omitted (returned as `TopupResult.key`). Crash-safe: the operation is recorded before the mint is called.
+   */
   topupWithToken(token: string, key?: EcashKey): Promise<TopupResult>;
+  /** Creates a Lightning invoice (NUT-04 mint quote) that credits `key`, or a new key, once paid. */
   startLightningTopup(amountSats: number, key?: EcashKey): Promise<LightningTopup>;
+  /** Checks a Lightning top-up and, the first time it finds the invoice paid, mints and credits. */
   checkLightningTopup(opId: string): Promise<LightningTopupStatus>;
+  /** Takes `amountSats` off the key in one atomic D1 statement. Never calls the mint. */
   debit(key: EcashKey, amountSats: number): Promise<DebitResult>;
+  /** Gives back an earlier debit, for a paid call that failed on your side. */
   credit(key: EcashKey, amountSats: number, reason: "data_source_error"): Promise<void>;
+  /** Empties the key and returns its credit minus the mint's swap fee as a fresh Cashu token. */
   refund(key: EcashKey): Promise<RefundResult>;
+  /** An in-band NUT-18 (`creqA`) or NUT-26 (`creqB`) payment request for `amountSats` from the accepted mints. */
   paymentRequest(amountSats: number, opts?: { description?: string }): string;
+  /** Serves the routes under `basePath` (default `/ecash`). Returns null for any other path. */
   handleRoutes(request: Request): Promise<Response | null>;
+  /**
+   * Wraps a handler behind NUT-24: `402` with `X-Cashu: creqA…` when unpaid, served after a debit when the request
+   * carries a token in `X-Cashu` or `Authorization: Bearer eck_…` with enough credit.
+   */
   protect(handler: PaidHandler, opts: { priceSats: number; description?: string }): (request: Request) => Promise<Response>;
+  /**
+   * The cron entry point. Every run settles stuck operations and checks that the pot covers all balances. The daily
+   * cron `0 3 * * *` also melts surplus sats to `melt.lightningAddress` and deletes never-funded keys older than 7 days.
+   */
   scheduled(controller: { cron: string; scheduledTime: number }): Promise<CronReport>;
   /**
    * For servers that guard their own routes (like the demo's /mcp): tops up from an `X-Cashu` header (with an optional
@@ -51,7 +74,10 @@ export interface Paywall {
   readonly mints: readonly string[];
 }
 
-/** Cheap (no network): build it per request from `env`. */
+/**
+ * Validates the config and returns a paywall. No network and no database access, so it is cheap enough to call once
+ * per request from `env`. Throws a plain Error on a bad config.
+ */
 export function createPaywall(config: PaywallConfig): Paywall {
   const ctx: Ctx = buildCtx(config);
   return {

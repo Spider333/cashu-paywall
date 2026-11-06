@@ -1,3 +1,4 @@
+/** Every error code the library returns. Each maps to one HTTP status (see docs/nut-24.md). */
 export type PaywallErrorCode =
   | "ECASH_TOKEN_INVALID" | "ECASH_MINT_NOT_ALLOWED" | "ECASH_UNIT_NOT_ALLOWED"
   | "ECASH_AMOUNT_TOO_LOW" | "ECASH_AMOUNT_TOO_HIGH" | "ECASH_BALANCE_CAP"
@@ -7,7 +8,7 @@ export type PaywallErrorCode =
   | "ECASH_RATE_LIMITED" | "ECASH_MINT_UNAVAILABLE" | "ECASH_PENDING"
   | "ECASH_POT_FULL" | "ECASH_INTERNAL";
 
-/** HTTP status and retry flag per code (PRD 6.9). */
+/** HTTP status, retry flag and default message per code. */
 const TABLE: Record<PaywallErrorCode, [number, boolean, string]> = {
   ECASH_TOKEN_INVALID: [400, false, "Not a valid Cashu token."],
   ECASH_MINT_NOT_ALLOWED: [400, false, "This token's mint is not accepted here."],
@@ -30,6 +31,7 @@ const TABLE: Record<PaywallErrorCode, [number, boolean, string]> = {
   ECASH_POT_FULL: [503, true, "This server holds as much ecash as it is allowed to. Try again after its next payout."],
 };
 
+/** An expected error with a stable `code`, its HTTP status and whether retrying can help. */
 export class PaywallError extends Error {
   readonly code: PaywallErrorCode;
   readonly httpStatus: number;
@@ -52,11 +54,12 @@ export class PaywallError extends Error {
   }
 }
 
+/** Type guard for `PaywallError`. */
 export function isPaywallError(e: unknown): e is PaywallError {
   return e instanceof PaywallError;
 }
 
-/** The shared JSON error body (PRD 6.5). `topupUrl` is added only when paying would fix the error. */
+/** The shared JSON error body. `topupUrl` is added only when paying would fix the error. */
 export function errorBody(e: PaywallError, topupUrl?: string): Record<string, unknown> {
   const body: Record<string, unknown> = { error: e.message, code: e.code, retryable: e.retryable };
   if (e.paymentRequest) {

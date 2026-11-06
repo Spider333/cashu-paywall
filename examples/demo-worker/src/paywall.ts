@@ -1,4 +1,4 @@
-// The only file that reads ECASH_* (PRD 7.4): maps the Worker's env to a PaywallConfig.
+// The only file that reads ECASH_*: maps the Worker's env to a PaywallConfig.
 import { createPaywall, type Paywall, type RateLimiter } from "cashu-paywall";
 
 export interface Env {

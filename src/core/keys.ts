@@ -1,10 +1,11 @@
 import { base64urlEncode, hmacHex } from "./crypto.js";
 
+/** A prepaid bearer key: `eck_` + 43 base64url characters (32 random bytes). */
 export type EcashKey = `eck_${string}`;
 
 const KEY_RE = /^eck_[A-Za-z0-9_-]{43}$/;
 
-/** True only for a well-formed `eck_` key (PRD 6.4). Never touches the database. */
+/** True only for a well-formed `eck_` key. Never touches the database, so a malformed key costs no D1 read. */
 export function isEcashKey(value: string | null | undefined): value is EcashKey {
   return typeof value === "string" && KEY_RE.test(value);
 }
@@ -20,7 +21,7 @@ export async function hashKey(pepper: string, key: EcashKey): Promise<{ keyHash:
   return { keyHash, kid: keyHash.slice(0, 16) };
 }
 
-/** Reads `Authorization: Bearer <value>`. Only the header is read, never the query string (PRD N-7). */
+/** Reads `Authorization: Bearer <value>`. Only the header is read, never the query string, so keys stay out of URLs and access logs. */
 export function bearerFrom(request: Request): string | null {
   const h = request.headers.get("Authorization");
   if (!h) return null;

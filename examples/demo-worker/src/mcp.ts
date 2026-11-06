@@ -1,4 +1,4 @@
-// The demo's MCP server, built fresh per request with the caller's key in a closure (PRD 7.3).
+// The demo's MCP server, built fresh per request with the caller's key in a closure (the transport is stateless).
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { EcashKey, Paywall } from "cashu-paywall";

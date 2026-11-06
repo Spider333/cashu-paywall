@@ -7,7 +7,7 @@ import type { BalanceInfo } from "../core/balance.js";
 import { paymentRequest } from "../core/requests.js";
 import { errorFields } from "../core/redact.js";
 
-export const NO_STORE = { "Cache-Control": "no-store" };
+const NO_STORE = { "Cache-Control": "no-store" };
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...NO_STORE, ...headers } });
@@ -25,7 +25,7 @@ export function errorResponse(ctx: Ctx, e: unknown, extraHeaders: Record<string,
   return json(errorBody(pe, topupUrl(ctx)), pe.httpStatus, headers);
 }
 
-export function toPaywallError(ctx: Ctx, e: unknown): PaywallError {
+function toPaywallError(ctx: Ctx, e: unknown): PaywallError {
   if (e instanceof PaywallError) return e;
   ctx.log.error("ecash_internal_error", errorFields(e));
   return new PaywallError("ECASH_INTERNAL");

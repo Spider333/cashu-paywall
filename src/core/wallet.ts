@@ -1,5 +1,5 @@
 // Builds a cashu-ts Wallet per mint: deterministic (NUT-13) with the D1 counter source, mint info and keys cached in D1 for 1 h.
-import { JSONInt, Mint, NetworkError, Wallet, getPubKeyFromPrivKey, isMintOperationError } from "@cashu/cashu-ts";
+import { JSONInt, Mint, Wallet, getPubKeyFromPrivKey, isMintOperationError } from "@cashu/cashu-ts";
 import type { GetInfoResponse, KeyChainCache } from "@cashu/cashu-ts";
 import type { Ctx } from "./context.js";
 import { fromHex, hmacHex, toHex } from "./crypto.js";
@@ -45,16 +45,6 @@ export async function getWallet(ctx: Ctx, mintUrl: string): Promise<Wallet> {
 export async function nut20Key(ctx: Ctx): Promise<{ privkey: string; pubkey: string }> {
   const privkey = await hmacHex(ctx.seed, "cashu-paywall/nut20/v1");
   return { privkey, pubkey: toHex(getPubKeyFromPrivKey(fromHex(privkey))) };
-}
-
-/** True for errors where the mint may or may not have acted (network, timeout, 5xx): the outcome is unknown. */
-export function outcomeUnknown(e: unknown): boolean {
-  if (isMintOperationError(e)) return false;
-  return true;
-}
-
-export function isNetworkError(e: unknown): boolean {
-  return e instanceof NetworkError;
 }
 
 /** NUT error codes we act on (confirmed on testnut 5 Nov 2026: 11001 for spent). */
