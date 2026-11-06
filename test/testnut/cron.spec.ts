@@ -4,7 +4,7 @@ import { env } from "cloudflare:test";
 import { CheckStateEnum, MintQuoteState } from "@cashu/cashu-ts";
 import { PaywallError, type PaywallConfig } from "../../src/index";
 import { keyRow, makePaywall } from "../helpers";
-import { Faucet, claim, testWallet } from "./faucet";
+import { Faucet, claim, retry, testWallet } from "./faucet";
 
 const faucet = new Faucet();
 const DAILY = { cron: "0 3 * * *", scheduledTime: Date.now() };
@@ -36,9 +36,9 @@ function lnurlStub(opts: { skew?: number } = {}) {
         });
       }
       if (url.pathname === "/cb") {
-        await issuer.loadMint();
+        await retry(() => issuer.loadMint());
         const sats = Number(url.searchParams.get("amount")) / 1000 + (opts.skew ?? 0);
-        const q = await issuer.createMintQuoteBolt11(sats);
+        const q = await retry(() => issuer.createMintQuoteBolt11(sats));
         quotes.push(q.quote);
         return Response.json({ pr: q.request, routes: [] });
       }
@@ -76,7 +76,16 @@ describe("melt", () => {
       melt: { lightningAddress: "demo@ln.example", minSats: 2000, keepSats: 500 },
     });
     expect((await pw.debit(key, left)).ok).toBe(true);
-    const r = await pw.scheduled(DAILY);
+    let r = await pw.scheduled(DAILY);
+    // A mint call that times out before the melt starts skips the run with "melt_error" and moves nothing; the next
+    // run melts. testnut is sometimes that slow.
+    for (let i = 0; i < 2 && r.skipped.some((s) => s.reason === "melt_error"); i++) {
+      const melts = await db()
+        .prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE kind = 'melt'")
+        .first<{ n: number }>();
+      expect(melts!.n).toBe(0);
+      r = await pw.scheduled(DAILY);
+    }
     expect(r.invariantOk).toBe(true);
     expect(r.skipped).toEqual([]);
     expect(r.melted.length).toBe(1);
@@ -100,7 +109,7 @@ describe("melt", () => {
       .first<{ s: number }>();
     expect(held!.s).toBeGreaterThan(0);
     expect(held!.s).toBeLessThanOrEqual(1000);
-    // Review #1: nothing vanished. D1's pot matches the mint and equals pot before - melted - fees.
+    // Nothing vanished: D1's pot matches the mint and equals pot before - melted - fees.
     const { potMatchesMint } = await import("./faucet");
     const { openRows } = await import("../helpers");
     expect(await potMatchesMint(db(), openRows)).toBe(held!.s);

@@ -2,7 +2,7 @@
 // out tokens of exact amounts. One faucet per spec file; calls are serialised because they share proofs.
 import { Mint, MintQuoteState, Wallet, getEncodedToken, type Proof } from "@cashu/cashu-ts";
 import { createMintRequest } from "../../src/core/mint-request";
-import { TESTNUT } from "../helpers";
+import { TESTNUT, makePaywall } from "../helpers";
 
 /** testnut is a public mint and sometimes slow: retry a test helper's mint calls on timeouts (never the code under test). */
 export async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
@@ -115,4 +115,26 @@ export async function potMatchesMint(db: D1Database, makeOpen: (rows: unknown[])
   const states = await w.checkProofsStates(proofs);
   if (!states.every((s) => s.state === "UNSPENT")) throw new Error("D1 says unspent but the mint disagrees");
   return proofs.reduce((s, p) => s + p.amount.toNumber(), 0);
+}
+
+/**
+ * Runs the recovery job, with its clock 16 minutes ahead, until none of `keyHash`'s ops is pending. A swap whose reply
+ * outlasts the 15 s mint timeout is reported as ECASH_PENDING and settled here; testnut can be slow here too, so a run
+ * that can't settle an op yet is retried.
+ */
+export async function settlePending(db: D1Database, keyHash: string, tries = 5): Promise<void> {
+  const pending = async () =>
+    (await db
+      .prepare("SELECT COUNT(*) AS n FROM ecash_ops WHERE status = 'pending' AND key_hash = ?")
+      .bind(keyHash)
+      .first<{ n: number }>())!.n;
+  for (let i = 0; i < tries; i++) {
+    if ((await pending()) === 0) return;
+    if (i > 0) await new Promise((r) => setTimeout(r, 2000));
+    await makePaywall(db, { now: () => Date.now() + 16 * 60 * 1000 }).scheduled({
+      cron: "*/10 * * * *",
+      scheduledTime: Date.now(),
+    });
+  }
+  if ((await pending()) > 0) throw new Error(`ops still pending after ${tries} recovery runs`);
 }

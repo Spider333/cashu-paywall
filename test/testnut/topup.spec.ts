@@ -1,10 +1,10 @@
-// M2 live: crash-safe token top-up and refund against testnut (T-TOP-1..3, 5, 7; T-REF-1..2; sealed proofs).
+// Live: crash-safe token top-up and refund against testnut (T-TOP-1..3, 5, 7; T-REF-1..2; sealed proofs).
 import { beforeAll, describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { getEncodedToken, getPubKeyFromPrivKey } from "@cashu/cashu-ts";
 import { PaywallError, type EcashKey } from "../../src/index";
 import { keyHash, keyRow, makePaywall } from "../helpers";
-import { Faucet, claim, mintProofs, testWallet } from "./faucet";
+import { Faucet, claim, mintProofs, settlePending, testWallet } from "./faucet";
 
 const db = () => env.DB_TOP;
 const faucet = new Faucet();
@@ -55,13 +55,20 @@ describe("T-TOP-1 / T-TOP-2 top-up and double spend", () => {
 });
 
 describe("T-TOP-3 same token in parallel", () => {
-  it("5 concurrent submissions -> exactly 1 success, credited once", async () => {
+  it("5 concurrent submissions -> at most 1 success, credited exactly once", async () => {
     const pw = makePaywall(db());
     const { key } = await pw.createKey();
     const t = await faucet.token(50);
     const codes = await Promise.all(Array.from({ length: 5 }, () => codeOf(pw.topupWithToken(t, key))));
-    expect(codes.filter((c) => c === "ok").length).toBe(1);
+    // One submission wins the claim and swaps; the others see its pending op (PENDING) or its done op (SPENT). If the
+    // winner's swap reply outlasts the mint timeout, the winner reports PENDING too and the recovery job settles it.
+    expect(codes.filter((c) => c === "ok").length).toBeLessThanOrEqual(1);
     expect(codes.every((c) => ["ok", "ECASH_TOKEN_SPENT", "ECASH_PENDING"].includes(c))).toBe(true);
+    await settlePending(db(), await keyHash(key));
+    if ((await keyRow(db(), key))!.balance === 0) {
+      // Recovery found the swap never reached the mint: the token is still the payer's, so they send it again.
+      expect(await codeOf(pw.topupWithToken(t, key))).toBe("ok");
+    }
     const row = await keyRow(db(), key);
     expect(row!.balance).toBe(50 - faucet.feeFor(t));
     const ops = await db()
