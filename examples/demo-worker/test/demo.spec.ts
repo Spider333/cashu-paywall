@@ -1,4 +1,4 @@
-// Demo Worker tests (PRD 11.1 T-DEMO-1..4, T-MCP-5, 11.4 N-1..N-4). Live against testnut (test sats).
+// Demo Worker tests (T-DEMO-1..4, T-MCP-5, bearer and JSON-RPC edge cases). Live against testnut (test sats).
 import { beforeAll, describe, expect, it } from "vitest";
 import { SELF, env } from "cloudflare:test";
 import { decodePaymentRequest } from "@cashu/cashu-ts";
@@ -66,7 +66,7 @@ describe("T-DEMO-1 paid route over NUT-24", () => {
     expect(r2.headers.get("X-Ecash-Key")).toMatch(/^eck_/);
     expect(Number(r2.headers.get("X-Ecash-Balance"))).toBe(20 - fee - 5);
 
-    // N-5: the same key with too little credit -> 402 again, as with no payment.
+    // The same key with too little credit -> 402 again, as with no payment.
     const key = r2.headers.get("X-Ecash-Key")!;
     for (let i = 0; i < 3; i++) await SELF.fetch(`${BASE}/api/nut-fact?nut=1`, { headers: bearer(key) });
     const r3 = await SELF.fetch(`${BASE}/api/nut-fact?nut=24`, { headers: bearer(key) });
@@ -82,13 +82,13 @@ describe("T-DEMO-1 paid route over NUT-24", () => {
 });
 
 describe("T-DEMO-2 /mcp auth", () => {
-  it("N-1: no bearer -> 401 JSON-RPC -32001 with topup_url", async () => {
+  it("no bearer -> 401 JSON-RPC -32001 with topup_url", async () => {
     const r = await mcp("tools/list", {});
     expect(r.res.status).toBe(401);
     expect(r.json.error.code).toBe(-32001);
     expect(r.json.error.data.topup_url).toBe("https://demo.test/ecash");
   });
-  it("N-2: Bearer abc -> 401, no D1 read", async () => {
+  it("Bearer abc -> 401, no D1 read", async () => {
     const before = await env.ECASH_DB.prepare("SELECT COUNT(*) AS n FROM ecash_keys").first<{ n: number }>();
     const r = await mcp("tools/list", {}, { Authorization: "Bearer abc" });
     expect(r.res.status).toBe(401);
@@ -96,7 +96,7 @@ describe("T-DEMO-2 /mcp auth", () => {
     expect(r.json.error.data.code).toBe("ECASH_KEY_INVALID");
     expect(before).toBeTruthy();
   });
-  it("N-3: unknown eck_ key -> 401 ECASH_KEY_INVALID", async () => {
+  it("unknown eck_ key -> 401 ECASH_KEY_INVALID", async () => {
     const r = await mcp("tools/list", {}, bearer("eck_" + "Z".repeat(43)));
     expect(r.res.status).toBe(401);
     expect(r.json.error.data.code).toBe("ECASH_KEY_INVALID");
@@ -131,7 +131,7 @@ describe("T-DEMO-3 / T-DEMO-4 tool debits and credit back", () => {
     expect(await balanceOf(key)).toBe(10);
     expect(await balanceOf(key)).toBe(10); // balance is free
 
-    // T-DEMO-4: a NUT not in the list -> tool error, balance unchanged (P1-5).
+    // T-DEMO-4: a NUT not in the list -> tool error, balance unchanged.
     const bad = await callTool("nut_fact", { nut: 98 }, bearer(key));
     expect(bad.json.result.isError).toBe(true);
     expect(await balanceOf(key)).toBe(10);
@@ -182,7 +182,7 @@ describe("T-MCP-5 X-Cashu on /mcp", () => {
   });
 });
 
-describe("N-4 JSON-RPC batch", () => {
+describe("JSON-RPC batch", () => {
   it("3 paid calls with 2 calls of credit: at most 2 succeed (or the batch is refused)", async () => {
     const { key } = await fundedKey(11); // 10 sats of credit = 2 calls at 5
     const body = [1, 2, 3].map((i) => ({

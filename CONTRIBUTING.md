@@ -28,7 +28,7 @@ The repo's `.npmrc` sets `legacy-peer-deps=true`. Without it, npm 10.9 fails whi
 
 testnut's Lightning is fake: its invoices pay themselves, so the live tests cost nothing. testnut is sometimes slow, and the live suites allow up to 120 s per test.
 
-Test names start with an id (`T-DEB-1`, `T-TOP-3`, `T-REC-2` and so on) from the original test plan. Keep the id when you change a test, and add a new one for a new case.
+Test names start with a short id (`T-DEB-1`, `T-TOP-3`, `T-REC-2` and so on): the area (`DEB` debit, `TOP` top-up, `REC` recovery, …) and a number. The ids exist so a failing test is easy to find and talk about. Keep the id when you change a test, and give a new case the next free number in its area.
 
 CI runs the typecheck, the unit tests and the format check on every push to `main` and every pull request. The live suites run only when started by hand (Actions → ci → Run workflow), so CI doesn't depend on testnut being up.
 

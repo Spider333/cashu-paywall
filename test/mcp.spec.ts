@@ -75,7 +75,7 @@ describe("T-MCP-4 chargeToolCall / withEcashCharge", () => {
   });
 });
 
-describe("tool metadata (PRD 6.5 A)", () => {
+describe("tool metadata", () => {
   it("descriptions > 80 chars, parameters described in 15+ chars, annotations set", async () => {
     const pw = makePaywall(db());
     const { client } = await connect(pw, null);

@@ -88,7 +88,7 @@ describe("T-REC-4 invariant", () => {
   });
 });
 
-describe("cleanup (PRD 6.7, P1-2)", () => {
+describe("cleanup", () => {
   it("deletes never-funded keys older than 7 days, keeps funded and recent ones", async () => {
     const old = Date.now() - 8 * 24 * 3600 * 1000;
     const pwOld = makePaywall(db(), { now: () => old });
@@ -109,7 +109,7 @@ describe("cleanup (PRD 6.7, P1-2)", () => {
   });
 });
 
-describe("review #5: recovery can't be starved", () => {
+describe("recovery can't be starved", () => {
   it("ops that can't finish move to the back of the queue, so the next run reaches the others", async () => {
     const old = Date.now() - 60 * 60 * 1000;
     for (let i = 0; i < 25; i++) {

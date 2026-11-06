@@ -1,4 +1,4 @@
-// NUT-24 and Lightning live against testnut: T-402-3, T-402-5, T-402-6, T-LN-1, T-LN-2, E-3.
+// NUT-24 and Lightning live against testnut: T-402-3, T-402-5, T-402-6, T-LN-1, T-LN-2, expired invoices.
 import { beforeAll, describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { getEncodedToken, getPubKeyFromPrivKey } from "@cashu/cashu-ts";
@@ -114,7 +114,7 @@ describe("T-LN-1 / T-LN-2 Lightning top-up", () => {
       .bind(j.op_id)
       .first<{ input_id: string; detail: string }>();
     expect(JSON.stringify(j)).not.toContain(op!.input_id); // the quote id never leaves the server
-    expect(JSON.parse(op!.detail).locked).toBe(true); // NUT-20 locked quote (P1-4)
+    expect(JSON.parse(op!.detail).locked).toBe(true); // NUT-20 locked quote
 
     const poll = async () => (await (await pw.handleRoutes(new Request(j.status_url)))!.json()) as Record<string, any>;
     let s = await poll();
@@ -149,7 +149,7 @@ describe("T-LN-1 / T-LN-2 Lightning top-up", () => {
     expect((await pw.balance(key)).balanceSats).toBe(50);
   });
 
-  it("E-3: an expired, unpaid invoice -> EXPIRED and no credit", async () => {
+  it("an expired, unpaid invoice -> EXPIRED and no credit", async () => {
     // testnut pays everything, so the status check is faked to UNPAID and the clock moved past expiry.
     const unpaid: typeof fetch = async (input, init) => {
       const url = String(input instanceof Request ? input.url : input);

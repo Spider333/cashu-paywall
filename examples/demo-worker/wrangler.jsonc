@@ -11,7 +11,7 @@
     {
       "binding": "ECASH_DB",
       "database_name": "cashu-paywall-demo",
-      // Placeholder until `wrangler d1 create cashu-paywall-demo` (held for David's yes). Local dev ignores it.
+      // Placeholder: replace with the id from `wrangler d1 create cashu-paywall-demo` before you deploy. Local dev ignores it.
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../migrations",
     },

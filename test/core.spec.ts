@@ -1,4 +1,4 @@
-// M1: keys, HMAC, schema, atomic debit, rate-limit hook, redaction (no mint needed).
+// Keys, HMAC, schema, atomic debit, rate-limit hook, redaction (no mint needed).
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { MIGRATIONS_SQL, redact, normalizeMintUrl } from "../src/index";
@@ -59,7 +59,7 @@ describe("T-DEB-2 unknown / frozen key", () => {
   });
 });
 
-describe("keys (PRD 6.4)", () => {
+describe("keys", () => {
   it("format, hash-only storage, kid", async () => {
     const pw = makePaywall(db());
     const { key, kid } = await pw.createKey();
@@ -97,7 +97,7 @@ describe("keys (PRD 6.4)", () => {
   });
 });
 
-describe("N-10 key isolation", () => {
+describe("key isolation", () => {
   it("parallel calls on key A never change key B", async () => {
     const pw = makePaywall(db());
     const a = await fundedKey(db(), 100);
@@ -168,7 +168,7 @@ describe("11.5 data and migration", () => {
   });
 });
 
-describe("redact (PRD 6.10)", () => {
+describe("redact", () => {
   it("masks tokens, keys, payment requests, invoices and 64-hex", () => {
     const s = [
       "cashuBo2FteBtodHRwczovL3Rlc3RudXQuY2FzaHUuc3BhY2VhdWNzYXRhdIGiYWlI",
@@ -205,7 +205,7 @@ describe("T-RL-1 rate limits", () => {
   });
 });
 
-describe("N-8 mint URL normalisation", () => {
+describe("mint URL normalisation", () => {
   it("trailing slash and uppercase host match the allowlist", () => {
     expect(normalizeMintUrl("https://TestNut.Cashu.Space/")).toBe("https://testnut.cashu.space");
     const pw = makePaywall(db(), { mints: ["https://TESTNUT.cashu.space/"] });

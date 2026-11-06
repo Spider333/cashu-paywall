@@ -1,4 +1,4 @@
-// Policy checks that must reject a token BEFORE any mint call (T-TOP-4, T-TOP-6, T-TOP-8, T-REF-3, N-9).
+// Policy checks that must reject a token BEFORE any mint call (T-TOP-4, T-TOP-6, T-TOP-8, T-REF-3, oversized headers).
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import { Amount, getEncodedToken } from "@cashu/cashu-ts";
@@ -98,7 +98,7 @@ describe("T-TOP-8 garbage", () => {
     expect(await code(pw.topupWithToken("hello"))).toBe("ECASH_TOKEN_INVALID");
     expect(m.calls).toEqual([]);
   });
-  it("N-9: a huge X-Cashu header -> 400 ECASH_TOKEN_INVALID before decoding", async () => {
+  it("a huge X-Cashu header -> 400 ECASH_TOKEN_INVALID before decoding", async () => {
     const m = noMint();
     const pw = makePaywall(db(), { fetch: m.fetch });
     const h = pw.protect(async () => new Response("served"), { priceSats: 5 });

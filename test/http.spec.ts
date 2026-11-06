@@ -55,7 +55,7 @@ describe("protect() with a bearer key (no mint)", () => {
     expect(res.headers.get("X-Ecash-Key")).toBeNull();
     expect((await pw.balance(key)).balanceSats).toBe(7);
   });
-  it("N-5: too little credit -> 402 with X-Cashu, as with no payment", async () => {
+  it("too little credit -> 402 with X-Cashu, as with no payment", async () => {
     const pw = makePaywall(db());
     const key = await fundedKey(db(), 4);
     const res = await pw.protect(fortune, { priceSats: 5 })(
@@ -64,7 +64,7 @@ describe("protect() with a bearer key (no mint)", () => {
     expect(res.status).toBe(402);
     expect(res.headers.get("X-Cashu")).toMatch(/^creqA/);
   });
-  it("malformed key -> 401; frozen key -> 403; N-7: key in the query string is ignored", async () => {
+  it("malformed key -> 401; frozen key -> 403; a key in the query string is ignored", async () => {
     const pw = makePaywall(db());
     const h = pw.protect(fortune, { priceSats: 5 });
     expect(
@@ -145,7 +145,7 @@ describe("T-LN-3 top-up page and routes", () => {
     expect(await pw.handleRoutes(new Request("https://paywall.test/other"))).toBeNull();
     expect(await pw.handleRoutes(new Request("https://paywall.test/ecashy"))).toBeNull();
   });
-  it("P1-2: POST /ecash/keys is limited per IP", async () => {
+  it("POST /ecash/keys is limited per IP", async () => {
     const { fakeLimiter } = await import("./helpers");
     const pw = makePaywall(db(), { rateLimiter: fakeLimiter(5) });
     const codes = [];
