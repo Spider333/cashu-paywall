@@ -67,7 +67,7 @@ const bal = Number(r200.headers.get("x-ecash-balance"));
 check(
   "2. retry with X-Cashu: <20-sat token> -> 200 + the NUT-24 fact",
   r200.status === 200 && fact.nut === 24,
-  `${fact.title}`,
+  `got the fact for NUT-${fact.nut}, titled "${fact.title}"`,
 );
 check(
   "   X-Ecash-Key and X-Ecash-Balance = 20 - fee - 5",

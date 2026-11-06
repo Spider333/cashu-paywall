@@ -20,7 +20,7 @@ You need Node 22.4+ and nothing else: no Cloudflare account, no wallet, no real 
 
 ```sh
 git clone https://github.com/Spider333/cashu-paywall.git && cd cashu-paywall
-npm install && npm run build          # 26 s on our VM
+npm install && npm run build
 cd examples/demo-worker
 npm run dev-vars                      # fresh local secrets in .dev.vars (gitignored)
 npm run db:local                      # create the local D1 tables
@@ -168,4 +168,4 @@ Threat model, limits and what is not protected: [docs/security.md](docs/security
 
 ## License
 
-MIT. Built with AI assistance (Claude), reviewed and owned by the author.
+MIT. Built with AI assistance (Claude Code). The author directed the work and owns it.

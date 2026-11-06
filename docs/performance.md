@@ -2,7 +2,7 @@
 
 Two questions matter on Cloudflare Workers: how much CPU each request uses (the Free plan allows 10 ms per request, Paid allows 30 s by default), and how big the bundle is. Short answer: a paid call is cheap, a top-up or refund is not, so a Worker that takes payments needs Workers Paid. The bundle is small.
 
-All numbers below were measured on 6 Nov 2026 on the development VM: DigitalOcean "DO-Regular", 4 vCPU, Node 22.23.4, against `testnut.cashu.space`. They are estimates from that machine, not from Cloudflare's edge.
+Unless a section says otherwise, the numbers below were measured on 6 Nov 2026 on the development VM: DigitalOcean "DO-Regular", 4 vCPU, Node 22.23.4, against `testnut.cashu.space`. They are estimates from that machine, not from Cloudflare's edge.
 
 ## Where the CPU goes
 
@@ -31,11 +31,11 @@ send (refund) 1000 sats  median 416.5 ms  min 394.5  max 431.2  (8 proofs in, 12
 
 The first row is a plain mint request with no curve math. It shows that Node's HTTP client accounts for about 6 ms. The rest is cashu-ts.
 
-## Measurement 2: CPU in workerd
+## Measurement 2: CPU in workerd (prototype, 5 Nov 2026, not reproducible from this repo)
 
 The first prototype ran the same calls inside a Worker under local `wrangler dev`, and estimated CPU as wall time minus the time spent waiting on `fetch`. That works locally because local workerd lets the clock run during CPU work: a busy loop of 5×10⁷ iterations reported 264 ms. Deployed Workers don't let the clock move during CPU work, so the method only works locally.
 
-The prototype is not in the tree any more. It is at commit `b06b5ea` (`git show b06b5ea:spike/worker.ts`), and was re-run for this page. Four rounds each, default splits:
+This is a dated measurement: it was taken once, on 5 Nov 2026, with cashu-ts 4.13.0 in local workerd (`wrangler dev`) on the same build VM. The prototype code is no longer in the repository, so no command here reproduces this table. What you can reproduce today is Measurement 1 (`npm run bench:cpu`) and the bundle sizes below (`npm run bench:bundle`). Four rounds each, default splits:
 
 | Operation | CPU estimate (min to max) |
 |---|---|
