@@ -2,7 +2,7 @@
 
 Two questions matter on Cloudflare Workers: how much CPU each request uses (the Free plan allows 10 ms per request, Paid allows 30 s by default), and how big the bundle is. Short answer: a paid call is cheap, a top-up or refund is not, so a Worker that takes payments needs Workers Paid. The bundle is small.
 
-Unless a section says otherwise, the numbers below were measured on 6 Nov 2026 on the development VM: DigitalOcean "DO-Regular", 4 vCPU, Node 22.23.4, against `testnut.cashu.space`. They are estimates from that machine, not from Cloudflare's edge.
+The numbers below were measured on 6 Nov 2026 on the development VM: DigitalOcean "DO-Regular", 4 vCPU, Node 22.23.4, against `testnut.cashu.space`. They are estimates from that machine, not from Cloudflare's edge.
 
 ## Where the CPU goes
 
@@ -16,7 +16,7 @@ Unless a section says otherwise, the numbers below were measured on 6 Nov 2026 o
 
 The secp256k1 math in cashu-ts (`@noble/curves`, pure JavaScript) dominates every request that touches the mint. Its cost grows with the number of proofs in and out. The library uses minimal splits (`denominationTarget: 1`), which makes a few more outputs than the default and keeps every op's outputs inside its 64-counter block.
 
-## Measurement 1: CPU in Node
+## CPU in Node
 
 `npm run bench:cpu` ([bench/cpu.mjs](../bench/cpu.mjs)) mints test tokens and times `wallet.receive` and `wallet.send` with `process.cpuUsage()`, which counts CPU only, not time waiting on the mint. One warm-up round, then 5 counted rounds:
 
@@ -31,26 +31,11 @@ send (refund) 1000 sats  median 416.5 ms  min 394.5  max 431.2  (8 proofs in, 12
 
 The first row is a plain mint request with no curve math. It shows that Node's HTTP client accounts for about 6 ms. The rest is cashu-ts.
 
-## Measurement 2: CPU in workerd (prototype, 5 Nov 2026, not reproducible from this repo)
-
-The first prototype ran the same calls inside a Worker under local `wrangler dev`, and estimated CPU as wall time minus the time spent waiting on `fetch`. That works locally because local workerd lets the clock run during CPU work: a busy loop of 5×10⁷ iterations reported 264 ms. Deployed Workers don't let the clock move during CPU work, so the method only works locally.
-
-This is a dated measurement: it was taken once, on 5 Nov 2026, with cashu-ts 4.13.0 in local workerd (`wrangler dev`) on the same build VM. The prototype code is no longer in the repository, so no command here reproduces this table. What you can reproduce today is Measurement 1 (`npm run bench:cpu`) and the bundle sizes below (`npm run bench:bundle`). Four rounds each, default splits:
-
-| Operation | CPU estimate (min to max) |
-|---|---|
-| `receive` of a 100-sat token (3 proofs in, 4 out) | 82 to 95 ms |
-| `receive` of a 1,000-sat token (6 proofs in, 8 out) | 134 to 278 ms |
-| `send` from the 100-sat proofs (9 outputs) | 73 to 83 ms |
-| `send` from the 1,000-sat proofs (16 outputs) | 97 to 167 ms |
-| `loadMintFromCache` + `getTokenMetadata` (no network) | 2 to 8 ms |
-| D1 batch insert of the new proofs (wall time, local SQLite) | 15 to 37 ms, mostly I/O |
-
 ## What this means
 
 - **Paid calls fit any plan.** One D1 statement and one HMAC per call, well under 1 ms of CPU.
-- **Top-ups, refunds and melts don't fit the Free plan.** Even the lower workerd estimate (82 ms for the smallest top-up) is 8 times the Free plan's 10 ms. Use Workers Paid. Its default limit of 30 s CPU per request leaves plenty of room.
-- **The two measurements disagree by a factor of 3 to 4.** Node's figure is CPU of the whole process, and workerd's is wall time minus network wait on a local runtime. We have not pinned down the difference. Cloudflare's edge CPUs are likely faster than this VM. The only number that settles it is the CPU time Cloudflare reports for a deployed Worker, which this project has not measured yet because nothing has been deployed.
+- **Top-ups, refunds and melts don't fit the Free plan.** The smallest top-up above (a 100-sat receive) takes about 300 ms of CPU in Node (medians of 290 to 340 ms across runs), about 30 times the Free plan's 10 ms. Even if Cloudflare's runtime were several times faster than this VM, a swap would stay far above 10 ms. Use Workers Paid. Its default limit of 30 s CPU per request leaves plenty of room.
+- **The exact figure on Cloudflare is not measured yet.** Node's number is CPU of the whole process on this VM, and Cloudflare's edge CPUs are likely faster. The only number that settles it is the CPU time Cloudflare reports for a deployed Worker, which this project has not measured because nothing has been deployed.
 
 ## Bundle size
 
@@ -67,6 +52,5 @@ The second line adds the MCP adapter, `@modelcontextprotocol/sdk` and zod. Worke
 ## Caveats
 
 - One VM, one day, one mint. testnut is a cdk-mintd instance with a fake Lightning backend.
-- Node and local workerd are both stand-ins for Cloudflare's runtime.
-- The workerd prototype used cashu-ts default splits. The library uses minimal splits, which means more outputs and slightly more CPU per swap.
+- Node is a stand-in for Cloudflare's runtime.
 - A mint with more keysets, or tokens with more proofs, cost more.

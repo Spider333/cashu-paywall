@@ -39,6 +39,7 @@ NUT-24 says "Wallets MUST support both formats", but the README lists `creqB` su
 | 400 | `ECASH_TOKEN_SPENT` | mint says spent, or this token was already used here | not covered; our choice |
 | 400 | `ECASH_TOKEN_INVALID` | not decodable, too long, too many proofs, rejected by the mint | not covered; our choice |
 | 400 | `ECASH_AMOUNT_TOO_HIGH`, `ECASH_BALANCE_CAP`, `ECASH_MINT_MISMATCH` | caps, or a bearer key bound to another mint | not covered |
+| 400 | `ECASH_NOTHING_TO_REFUND` | a refund (`/ecash/refund` or `ecash_refund`) when the balance is zero or below the mint's fee | not covered |
 | 401 | `ECASH_KEY_INVALID` | malformed or unknown bearer key | not covered |
 | 403 | `ECASH_KEY_FROZEN` | the operator froze the key | not covered |
 | 429 | `ECASH_RATE_LIMITED` | rate limited, with `Retry-After: 60` | not covered |
