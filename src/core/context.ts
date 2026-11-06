@@ -64,7 +64,7 @@ export interface PaywallConfig {
   testHooks?: TestHooks;
 }
 
-/** @internal */
+/** Crash points the library's own tests use to simulate a failure mid-operation. */
 export interface TestHooks {
   beforeSwap?(kind: "topup_token" | "refund"): void | Promise<void>;
   afterSwap?(kind: "topup_token" | "refund"): void | Promise<void>;
