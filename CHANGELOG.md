@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 (17 Nov 2026)
+
+Documentation only, no code changes: install instructions, a link to the live demo and a tidier README.
+
 ## 0.1.0 (17 Nov 2026)
 
 First release. Tested against `testnut.cashu.space` only. Unaudited.

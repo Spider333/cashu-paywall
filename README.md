@@ -16,7 +16,7 @@ Charge per call in [Cashu](https://cashu.space) ecash, on Cloudflare Workers and
 
 **Live demo.** [cashu-paywall-demo.cclevel.workers.dev](https://cashu-paywall-demo.cclevel.workers.dev) runs the [demo Worker](examples/demo-worker) on testnut, so it takes test sats only. `curl -si "https://cashu-paywall-demo.cclevel.workers.dev/api/nut-fact?nut=24"` shows the 402, [/ecash](https://cashu-paywall-demo.cclevel.workers.dev/ecash) is the top-up page, and from a clone `npm run demo:check -- https://cashu-paywall-demo.cclevel.workers.dev` runs the 14 checks against it.
 
-> **Status: 0.1.0 on [npm](https://www.npmjs.com/package/cashu-paywall), unaudited.** Tested only against `testnut.cashu.space`, a test mint whose Lightning is fake. Use a test mint first. Read [docs/security.md](docs/security.md) before you point it at a mint with real sats.
+> **Status: 0.1.1 on [npm](https://www.npmjs.com/package/cashu-paywall), unaudited.** Tested only against `testnut.cashu.space`, a test mint whose Lightning is fake. Use a test mint first. Read [docs/security.md](docs/security.md) before you point it at a mint with real sats.
 
 ## Try it in 5 minutes
 
@@ -155,7 +155,7 @@ Threat model, limits and what is not protected: [docs/security.md](docs/security
 
 ## Limitations and status
 
-- 0.1.0, unaudited. Tested against testnut only (cdk-mintd 0.18.1). On npm since 17 Nov 2026; the live demo runs on testnut only.
+- 0.1.1, unaudited. Tested against testnut only (cdk-mintd 0.18.1). On npm since 17 Nov 2026; the live demo runs on testnut only.
 - Top-ups, refunds and melts need Workers Paid: a swap takes far more than the Free plan's 10 ms of CPU ([docs/performance.md](docs/performance.md)). Paid calls fit either plan.
 - `sat` only. One mint per key. Rate limiting needs a Cloudflare Rate Limiting binding.
 - The excess of an overpaid NUT-24 request stays as credit on a new key (`X-Ecash-Key`). NUT-24 doesn't define change, so plain NUT-24 clients ignore it ([docs/nut-24.md](docs/nut-24.md)).
@@ -172,4 +172,4 @@ Threat model, limits and what is not protected: [docs/security.md](docs/security
 
 ## License
 
-MIT. Built with AI assistance (Claude Code). The author directed the work and owns it.
+MIT. See [LICENSE](LICENSE).

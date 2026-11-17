@@ -75,7 +75,7 @@ check(
   `key ${short(key)}, balance ${bal}`,
 );
 
-// 3. The same key over MCP (what Claude Code sends with --transport http)
+// 3. The same key over MCP (Streamable HTTP, as an MCP client sends it)
 const auth = { Authorization: `Bearer ${key}` };
 const init = await mcp(
   "initialize",
