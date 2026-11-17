@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (17 Nov 2026)
 
 First release. Tested against `testnut.cashu.space` only. Unaudited.
 

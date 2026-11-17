@@ -13,6 +13,8 @@ MCP tools: `nut_fact` and `echo` cost 5 sats each (a `nut_fact` for a NUT not in
 
 It accepts only `https://testnut.cashu.space`, whose Lightning is fake: its invoices pay themselves. No real money moves unless you add a real mint.
 
+A live copy runs at https://cashu-paywall-demo.cclevel.workers.dev with the same code and the same testnut-only settings. From the repo root, `npm run demo:check -- https://cashu-paywall-demo.cclevel.workers.dev` runs the 14 checks against it.
+
 ## Run it locally
 
 No Cloudflare account needed. From the repo root:
