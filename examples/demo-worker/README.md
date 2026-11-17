@@ -59,7 +59,7 @@ X-Ecash-Kid: c56bd006ae18705a
 
 ### 2. The MCP tools
 
-In Claude Code, add the demo with the key from step 1:
+Add the demo to any MCP client that speaks Streamable HTTP, with the key from step 1. For example, in Claude Code:
 
 ```sh
 claude mcp add --transport http cashu-demo http://localhost:8787/mcp --header "Authorization: Bearer eck_A2_uML0N0eHoY4ffPuZfhtRcST6ExilR_ng5nTAZS8c"
@@ -67,7 +67,7 @@ claude mcp add --transport http cashu-demo http://localhost:8787/mcp --header "A
 
 Then ask: "Get the nut fact for NUT-18, echo 'hello nut', then show my ecash balance."
 
-The transcript below was not captured in Claude Code, which isn't installed on the machine we used. It shows the same Streamable HTTP `tools/call` requests Claude Code sends, posted with curl to `/mcp` with the same `Authorization` header. Each line is the tool's text result:
+The transcript below shows the Streamable HTTP `tools/call` requests an MCP client sends, posted with curl to `/mcp` with the same `Authorization` header. Each line is the tool's text result:
 
 ```
 tools/list                    nut_fact, echo, ecash_topup, ecash_balance, ecash_refund

@@ -1,6 +1,6 @@
 {
   "name": "cashu-paywall",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Charge per call in Cashu ecash: prepaid eck_ keys, NUT-24 HTTP 402 and an MCP adapter for Cloudflare Workers",
   "license": "MIT",
   "author": "David Stancel",
